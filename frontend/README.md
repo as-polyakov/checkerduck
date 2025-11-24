@@ -71,7 +71,63 @@ frontend/
 
 ## API Integration
 
-The frontend expects a backend API at `/api`. Update the proxy configuration in `vite.config.ts` if your backend runs on a different port.
+The frontend requires the `VITE_API_URL` environment variable to connect to the backend API.
+
+### Local Development
+Create a `.env` file in the `frontend/` directory:
+
+```env
+VITE_API_URL=http://localhost:8000
+```
+
+Then start the dev server:
+
+```bash
+npm run dev
+```
+
+### Production Deployment
+
+#### Option 1: Build-time configuration
+Set environment variable when building:
+
+```bash
+VITE_API_URL=https://api.example.com:8000 npm run build
+```
+
+#### Option 2: Docker build argument
+```bash
+docker build --build-arg VITE_API_URL=https://api.example.com:8000 -t frontend .
+```
+
+#### Option 3: Docker Compose
+```yaml
+services:
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: https://api.example.com:8000
+    ports:
+      - "80:80"
+```
+
+### Examples
+
+**Same host (different ports):**
+```env
+VITE_API_URL=http://192.168.1.100:8000
+```
+
+**Different host:**
+```env
+VITE_API_URL=https://backend.example.com:8000
+```
+
+**Production with HTTPS:**
+```env
+VITE_API_URL=https://api.yourdomain.com
+```
 
 ## Customization
 
