@@ -13,7 +13,7 @@ React-based UI for the SEO Domain Checker application.
 
 ## Getting Started
 
-### Install Dependencies
+### Install Dependencies 
 
 ```bash
 npm install
