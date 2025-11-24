@@ -5,19 +5,18 @@ import { Analysis, AnalysisStatus, DomainData, DomainInput } from "./types";
 
 // ===== API Configuration =====
 const getApiBaseUrl = () => {
-  // Use the same hostname as the frontend, but with port 8000 for API
-  const protocol = window.location.protocol; // http: or https:
-  const hostname = window.location.hostname; // e.g., 192.168.0.11 or example.com
-  const apiBaseUrl = `${protocol}//${hostname}:8000`;
-  console.log(
-    "getApiBaseUrl - protocol:",
-    protocol,
-    "hostname:",
-    hostname,
-    "full URL:",
-    apiBaseUrl
-  );
-  return apiBaseUrl;
+  // Get backend URL from environment variable
+  const apiUrl = import.meta.env.VITE_API_URL;
+
+  if (!apiUrl) {
+    console.error("VITE_API_URL environment variable is not set!");
+    throw new Error(
+      "Backend API URL is not configured. Please set VITE_API_URL environment variable."
+    );
+  }
+
+  console.log("Using backend API URL:", apiUrl);
+  return apiUrl;
 };
 
 // ===== Main App with Navigation =====
@@ -61,7 +60,14 @@ export default function App() {
 
         // Convert API response to frontend format
         const analysesData: Analysis[] = data.analyses.map((a: any) => {
-          console.log("Processing analysis:", a.id, "status:", a.status, "type:", typeof a.status);
+          console.log(
+            "Processing analysis:",
+            a.id,
+            "status:",
+            a.status,
+            "type:",
+            typeof a.status
+          );
           return {
             id: a.id,
             name: a.name,
