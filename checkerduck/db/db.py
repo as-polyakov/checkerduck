@@ -1,12 +1,11 @@
 import os
 import sqlite3
 import threading
-from functools import wraps
+from enum import Enum
 from sqlite3 import Connection
 
 from alembic import command
 from alembic.config import Config
-from enum import Enum
 
 
 class LinkDirection(str, Enum):
@@ -23,6 +22,7 @@ _db_path: str = ""
 
 
 def init_database(db_path: str = DB_PATH, alembic_ini_path: str = "alembic.ini"):
+    print("Initializing database...")
     if not db_path:
         raise RuntimeError("Database not configured. Provide db_path during initialization.")
     alembic_cfg = Config(alembic_ini_path)
@@ -45,27 +45,9 @@ def get_thread_connection() -> Connection:
         conn = sqlite3.connect(_db_path)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("PRAGMA journal_mode = WAL")  # readers concurrent with writer
+        conn.execute("PRAGMA busy_timeout = 5000")  # wait instead of SQLITE_BUSY
+        conn.execute("PRAGMA synchronous = NORMAL")  # safe under WAL
+        conn.execute("PRAGMA foreign_keys = ON")
         _thread_local.conn = conn
     return conn
-
-
-def persist_domain_categories(conn: Connection, target_id: str, domain_categories):
-    try:
-        cur = conn.cursor()
-        for domain, category in domain_categories.items():
-            update_query = """
-                            UPDATE batch_analysis SET domain_category = ? WHERE target_id = ? AND domain = ?
-                        """
-
-            values = (
-                category,
-                target_id,
-                domain
-            )
-            cur.execute(update_query, values)
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()

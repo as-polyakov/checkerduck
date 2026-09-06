@@ -6,12 +6,12 @@ import sys
 import traceback
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-
-import db.db
-from api.routes import router
 from fastapi import Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
+
+from checkerduck.api.routes import router
+from checkerduck.db import db
 
 # Create FastAPI app
 app = FastAPI(
@@ -59,7 +59,7 @@ async def all_exception_handler(request: Request, exc: Exception):
 if __name__ == "__main__":
     import uvicorn
 
-    db.db.init_database()
+    db.init_database()
     logging.basicConfig(level=logging.DEBUG)
     logging.getLogger("uvicorn.error").setLevel(logging.DEBUG)
     logging.getLogger("uvicorn.access").setLevel(logging.DEBUG)

@@ -1,16 +1,19 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List
+from typing import List, Sequence
 
 import requests
 from bs4 import BeautifulSoup
+import logging
 
-from resources.langs import get_lang_by_country
-from utils import logger, detector
-import asyncio
-import aiohttp
+from lingua import LanguageDetectorBuilder
+from checkerduck.extract.ahrefs_models import AnalysedDomain
+from checkerduck.resources.langs import get_lang_by_country
 
+logger = logging.Logger(__name__)
 
-def get_domain_lang_by_top_traffic(top_country_by_traffic: List[List[str]]) -> str:
+detector = LanguageDetectorBuilder.from_all_languages().build()
+
+def get_domain_lang_by_top_traffic(top_country_by_traffic: List[tuple[str, int]]) -> str:
     return get_lang_by_country(
         max(top_country_by_traffic, key=lambda x: int(x[1]))[0]
     )
@@ -47,6 +50,21 @@ def get_domain_lang(domain: str, lang_by_traffic: str) -> str:
     return lang
 
 
+def build_lang_by_typed_domain(analyzed_domains: Sequence[AnalysedDomain]):
+    lang_by_domain = {}
+    with ThreadPoolExecutor(max_workers=50) as executor:
+        future_to_domain = {tgt.domain:
+                                executor.submit(get_domain_lang, tgt.domain,
+                                                get_domain_lang_by_top_traffic(tgt.metrics.org_traffic_top_by_country))
+                            for tgt in analyzed_domains}
+        for domain, future in future_to_domain.items():
+            try:
+                lang_by_domain[domain] = future.result()
+            except Exception as e:
+                # handle or log failure gracefully
+                print(f"Failed to get lang for {domain}: {e}")
+    return lang_by_domain
+
 def build_lang_by_domain(batch_analysis_results):
     lang_by_domain = {}
     with ThreadPoolExecutor(max_workers=50) as executor:
@@ -54,7 +72,6 @@ def build_lang_by_domain(batch_analysis_results):
                                 executor.submit(get_domain_lang, tgt['domain'],
                                                 get_domain_lang_by_top_traffic(tgt['org_traffic_top_by_country']))
                             for tgt in batch_analysis_results['targets']}
-        # Collect results as they complete
         for domain, future in future_to_domain.items():
             try:
                 lang_by_domain[domain] = future.result()

@@ -7,19 +7,19 @@ from typing import List, Callable, Any
 
 from fastapi import APIRouter, HTTPException, status
 
-import dao
-from api.analysis_service import (
+from checkerduck.db import dao
+from checkerduck.api.analysis_service import (
     create_analysis,
     to_analysis_response,
     list_analyses,
 )
-from api.models import (
+from checkerduck.api.models import (
     StartAnalysisRequest,
     AnalysisResponse,
     ListAnalysesResponse, AnalysisResultsResponse, DomainAnalysisResult, RuleEvaluationResponse
 )
-from db.db import LinkDirection
-from resources.disallowed_words import ForbiddenWordCategory
+from checkerduck.db.db import LinkDirection
+from checkerduck.resources.disallowed_words import ForbiddenWordCategory
 
 router = APIRouter(prefix="/api", tags=["analysis"])
 
@@ -88,7 +88,7 @@ async def get_analyses():
 @handle_exceptions
 async def get_analysis_results_by_id(analysis_id: str) -> AnalysisResultsResponse:
     analysis = dao.get_analysis(analysis_id)
-    analysis_domains_by_name = {d.domain : d for d in analysis.domains}
+    analysis_domains_by_name = {d.domain: d for d in analysis.domains}
     rule_evaluations_per_domain = dao.get_rule_evaluations(analysis_id)
     domain_results: List[DomainAnalysisResult] = []
     for domain, rule_evaluations in rule_evaluations_per_domain.items():

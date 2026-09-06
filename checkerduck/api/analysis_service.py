@@ -6,19 +6,19 @@ import uuid
 from datetime import datetime
 from typing import List
 
-import dao
-from api.models import StartAnalysisRequest, AnalysisResponse, AnalysisStatus
-from extract.extract import DataExtractor
-from model import Analysis
-from model.models import AnalysisDomain
-from rules.rule_aggregator import evaluate_domain
-from utils import _safe_int
+from checkerduck.api.models import StartAnalysisRequest, AnalysisResponse, AnalysisStatus
+from checkerduck.extract.extractor import DataExtractor
+from checkerduck.model import Analysis
+from checkerduck.model.models import AnalysisDomain
+from checkerduck.rules.rule_aggregator import evaluate_domain
+from checkerduck.domain.utils import safe_int
+from checkerduck.db import dao
 
 
 def create_analysis(request: StartAnalysisRequest) -> AnalysisResponse:
     analysis_id = str(uuid.uuid4())
     res = Analysis(analysis_id, request.name, AnalysisStatus.PENDING, datetime.now(), None,
-                   [AnalysisDomain(d.domain, _safe_int(d.price), d.notes) for d in request.domains], 0)
+                   [AnalysisDomain(d.domain, safe_int(d.price), d.notes) for d in request.domains], 0)
     dao.persist_analysis(res)
 
     analysis_data = {

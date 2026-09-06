@@ -10,7 +10,7 @@ import sys
 
 sys.path.append('../extract')
 
-from extract.extract import AhrefsClient, AhrefsDatabaseError
+from checkerduck.extract.extract import AhrefsClient, AhrefsDatabaseError
 
 
 def test_pure_sql_operations():

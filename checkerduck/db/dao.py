@@ -1,12 +1,12 @@
 from datetime import datetime
 from typing import Dict, List, Tuple
 
-from db.db import get_thread_connection
-from db.db import LinkDirection
-from model import Analysis, AnalysisStatus
-from resources.disallowed_words import ForbiddenWordCategory
-from model.models import RuleEvaluation, AnalysisDomain
-from utils import _safe_int
+from checkerduck.db.db import get_thread_connection
+from checkerduck.db.db import LinkDirection
+from checkerduck.model import Analysis, AnalysisStatus
+from checkerduck.resources.disallowed_words import ForbiddenWordCategory
+from checkerduck.model.models import RuleEvaluation, AnalysisDomain
+from checkerduck.domain.utils import safe_int
 
 
 def select_one(query: str, params: tuple = ()) -> dict | None:
@@ -160,7 +160,7 @@ def get_in_out_num_domains(target_id: str, domain: str) -> (int, int):
     res = select_one(
         "select linked_domains_dofollow, refdomains_dofollow from batch_analysis where target_id = ? and domain = ?",
         (target_id, domain))
-    return _safe_int(res["linked_domains_dofollow"]), _safe_int(res["refdomains_dofollow"])
+    return safe_int(res["linked_domains_dofollow"]), safe_int(res["refdomains_dofollow"])
 
 
 def get_domain_top_traffic_geography(target_id: str, domain: str) -> str:

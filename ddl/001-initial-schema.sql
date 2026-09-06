@@ -78,9 +78,9 @@ CREATE TABLE ahrefs_org_traffic_country
 CREATE TABLE ahrefs_metrics_history
 (
     target_id    TEXT NOT NULL,
-    domain       TEXT, -- ISO country code (2 chars)
-    country_code TEXT, -- ISO country code (2 chars)
-    date         TEXT, --SO-8601 strings (YYYY-MM-DDTHH:MM:SSZ)
+    domain       TEXT NOT NULL,
+    country_code TEXT NOT NULL, -- ISO country code (2 chars)
+    date         TEXT NOT NULL, --SO-8601 strings (YYYY-MM-DDTHH:MM:SSZ)
     org_cost     INTEGER,
     org_traffic  INTEGER,
     paid_cost    INTEGER,
@@ -130,7 +130,7 @@ CREATE TABLE anchors_forbidden_words
     url_from                TEXT,
     snippet_left            TEXT,
     snippet_right           TEXT,
-    PRIMARY KEY (target_id, domain, direction, anchor)
+    PRIMARY KEY (target_id, domain, direction, anchor, url_from)
 );
 
 -- Table for top pages

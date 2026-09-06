@@ -1,16 +1,20 @@
-import dao
-from db.db import init_database
-from rules.rule_aggregator import evaluate_domain
+from checkerduck.db.db import init_database
+from checkerduck.extract.extractor import DataExtractor
+from checkerduck.db import dao
 
 
 def main():
     init_database()
-    id = "0176e4b4-9a13-43d1-9eb1-5792f908126f"
+    id = "74354b17-c323-4e25-8e2d-13fa99428b9f"
     analysis = dao.get_analysis(id)
-    eval_results = [evaluate_domain(id, domain.domain)
-                    for domain in analysis.domains]
+    extractor = DataExtractor()
+    extractor.run_extract(analysis)
 
-    print(f"{eval_results}")
+
+    # eval_results = [evaluate_domain(id, domain.domain)
+    #                 for domain in analysis.domains]
+
+    # print(f"{eval_results}")
     # for d in ["bitchipdigital.com"]:
     #     print(HistoricalOrganicTrafficRule().eval(EvalContext(id, d)))
 

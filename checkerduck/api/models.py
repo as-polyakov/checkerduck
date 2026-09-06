@@ -6,7 +6,7 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 # Import Analysis and AnalysisStatus from model layer
-from model.models import Analysis, AnalysisStatus, RuleEvaluation
+from checkerduck.model.models import Analysis, AnalysisStatus, RuleEvaluation
 
 
 class DomainInput(BaseModel):

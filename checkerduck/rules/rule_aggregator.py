@@ -1,7 +1,7 @@
 import traceback
 from typing import List
 
-from rules.seo_rule import *
+from checkerduck.rules.seo_rule import *
 
 
 def evaluate_domain(target_id: str, domain: str) -> List[RuleEvaluation]:

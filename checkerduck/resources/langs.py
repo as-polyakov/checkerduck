@@ -1,5 +1,4 @@
 from importlib import resources as resources
-from typing import List
 
 import yaml
 

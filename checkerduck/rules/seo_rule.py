@@ -4,16 +4,15 @@ from dataclasses import dataclass
 from typing import Literal
 
 import numpy as np
-from scipy.stats import linregress
 from scipy import signal
+from scipy.stats import linregress
 
-import dao
-from dao import get_domain_dr, get_domain_traffic_by_country, get_domain_traffic_by_date, get_in_out_num_domains, \
+from checkerduck.db import dao
+from checkerduck.db.dao import get_domain_dr, get_domain_traffic_by_country, get_domain_traffic_by_date, get_in_out_num_domains, \
     get_top_pages_traffic, get_anchors_forbidden_words, get_organic_keywords_forbidden_words, get_domain_category
-from db import db
-from model.models import RuleEvaluation
-from resources.disallowed_words import ForbiddenWordCategory
-from scipy.signal import find_peaks
+from checkerduck.db import db
+from checkerduck.model.models import RuleEvaluation
+from checkerduck.resources.disallowed_words import ForbiddenWordCategory
 
 
 @dataclass

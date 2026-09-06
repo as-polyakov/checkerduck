@@ -3,7 +3,7 @@
 Entry point for running the API server
 """
 import uvicorn
-from api.server import app
+from checkerduck.api.server import app
 
 if __name__ == "__main__":
     uvicorn.run(

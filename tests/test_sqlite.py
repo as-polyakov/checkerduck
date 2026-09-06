@@ -5,7 +5,7 @@ This script demonstrates basic functionality without needing real API calls.
 """
 
 import json
-from extract.extract import AhrefsClient, AhrefsDatabaseError
+from checkerduck.extract.extract import AhrefsClient, AhrefsDatabaseError
 
 def test_database_operations():
     """Test database initialization and basic operations."""
