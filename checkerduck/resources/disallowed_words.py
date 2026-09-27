@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+from enum import Enum
 from importlib import resources as resources
-from typing import List, Dict, Any, Sequence
+from typing import Dict, Any, Sequence
 
 import yaml
-from enum import Enum
 
 from checkerduck.model.models import TargetQueryableDomain
 
@@ -14,7 +14,7 @@ class ForbiddenWordCategory(str, Enum):
     SPAM = "spam"
 
 def get_disallowed_words() -> Dict[str, Dict[str, Any]]:
-    with resources.files("resources").joinpath("disallowed_words.yaml").open("r") as f:
+    with resources.files("checkerduck.resources").joinpath("disallowed_words.yaml").open("r") as f:
         disallowed_words_data = yaml.safe_load(f)
 
     return disallowed_words_data

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Sequence
 
 from checkerduck.db.db import get_thread_connection
 from checkerduck.db.db import LinkDirection
@@ -7,6 +7,7 @@ from checkerduck.model import Analysis, AnalysisStatus
 from checkerduck.resources.disallowed_words import ForbiddenWordCategory
 from checkerduck.model.models import RuleEvaluation, AnalysisDomain
 from checkerduck.domain.utils import safe_int
+from checkerduck.resources.cloudflare_categories import CloudFlareCategory
 
 
 def select_one(query: str, params: tuple = ()) -> dict | None:
@@ -84,11 +85,12 @@ def get_recent_analysis() -> list[dict]:
     return select_all(
         """
         select target_id,
-       name,
-       status,
-       created_at,
-       completed_at,
-       (select count(*) from analysis_domains where target_id = analysis.target_id) as "total_domains", processed_domains
+               name,
+               status,
+               created_at,
+               completed_at,
+               (select count(*) from analysis_domains where target_id = analysis.target_id) as "total_domains",
+               processed_domains
         from analysis
         order by created_at, completed_at desc
         """, ())
@@ -98,15 +100,18 @@ def get_analysis(analysis_id: str) -> Analysis:
     h = select_one(
         """
         select target_id,
-       name,
-       status,
-       created_at,
-       completed_at,
-       (select count(*) from analysis_domains where target_id = analysis.target_id) as "total_domains", processed_domains
-        from analysis where target_id = ?
+               name,
+               status,
+               created_at,
+               completed_at,
+               (select count(*) from analysis_domains where target_id = analysis.target_id) as "total_domains",
+               processed_domains
+        from analysis
+        where target_id = ?
         """, (analysis_id,))
     domains = select_all("select domain, price_usd, notes from analysis_domains where target_id = ?", (analysis_id,))
-    return Analysis(h["target_id"], h["name"], h["status"], safe_date_from_str(h["created_at"]), safe_date_from_str(h["completed_at"]),
+    return Analysis(h["target_id"], h["name"], h["status"], safe_date_from_str(h["created_at"]),
+                    safe_date_from_str(h["completed_at"]),
                     [AnalysisDomain(d["domain"], d["price_usd"], d["notes"]) for d in domains],
                     int(h["processed_domains"]))
 
@@ -132,6 +137,13 @@ def get_organic_keywords_forbidden_words(target_id: str, domain: str, category: 
         "select keyword, keyword_country, is_best_position_set_top_3,is_best_position_set_top_4_10, is_best_position_set_top_11_50, best_position_url from ahrefs_organic_keywords where " +
         "target_id = ? and domain = ? and forbidden_word_category = ?",
         (target_id, domain, category))
+
+
+def get_backlinks(target_id: str, domain: str) -> list[dict[str, str]]:
+    return select_all(
+        "select anchor, is_spam from ahrefs_backlinks where " +
+        "target_id = ? and domain = ?",
+        (target_id, domain))
 
 
 def get_anchors_forbidden_words(target_id: str, domain: str,
@@ -163,9 +175,10 @@ def get_in_out_num_domains(target_id: str, domain: str) -> (int, int):
     return safe_int(res["linked_domains_dofollow"]), safe_int(res["refdomains_dofollow"])
 
 
-def get_domain_top_traffic_geography(target_id: str, domain: str) -> str:
+def get_domain_top_traffic_geographies(target_id: str, domain: str, top_n: int) -> List[str]:
     traffic_by_country = get_domain_traffic_by_country(target_id, domain)
-    return max(traffic_by_country, key=traffic_by_country.get)
+    ranked = sorted(traffic_by_country, key=traffic_by_country.get, reverse=True)
+    return ranked[:top_n]
 
 
 def get_domain_traffic_by_date(target_id: str, domain: str) -> Dict[str, int]:
@@ -196,6 +209,7 @@ def get_domain_dr(target_id: str, domain: str) -> int:
     return 0 if not rating["domain_rating"] else int(rating["domain_rating"])
 
 
-def get_domain_category(target_id: str, domain: str) -> str:
-    return select_one("select domain_category from batch_analysis WHERE target_id = ? AND domain = ?",
-                      (target_id, domain))["domain_category"]
+def get_domain_categories(target_id: str, domain: str) -> Sequence[CloudFlareCategory]:
+    categories = select_all("select id, super_category_id from domain_categories WHERE target_id = ? AND domain = ?",
+                     (target_id, domain))
+    return [CloudFlareCategory(c['id'], c['super_category_id']) for c in categories]

@@ -6,6 +6,7 @@ from typing import Dict, Any
 
 import requests
 
+from checkerduck.extract.http import new_session
 
 def cache(cache_name, results: Dict[str, Any], cache_dir: str = "cache") -> str:
     print("\nSaving results to cache...")
@@ -41,8 +42,7 @@ class SimilarWebClient:
                  db_path: str = None):
         self.api_token = api_token
         self.timeout = timeout
-        self.session = requests.Session()
-        self.session.headers.update({
+        self.session = new_session(headers={
             'Accept': 'application/json, application/xml',
             'api-key': f'{api_token}',
             'Content-Type': 'application/json'
@@ -93,7 +93,7 @@ class SimilarWebClient:
                 f"Couldn't get report from Similar Web afte {counter} attempts. What I got was: {status}")
 
         download_url = status["download_url"]
-        response = requests.get(download_url)
+        response = self.session.get(download_url, timeout=self.timeout)
         response.raise_for_status()  # raises error if the request failed
         domain_categories = {}
         for line in response.text.splitlines():

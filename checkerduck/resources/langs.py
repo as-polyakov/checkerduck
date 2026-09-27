@@ -2,7 +2,7 @@ from importlib import resources as resources
 
 import yaml
 
-with resources.files("resources").joinpath("langs.yaml").open("r") as f:
+with resources.files("checkerduck.resources").joinpath("langs.yaml").open("r") as f:
     lang_by_country = yaml.safe_load(f)
 
 

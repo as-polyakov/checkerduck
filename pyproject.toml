@@ -1,0 +1,39 @@
+[project]
+name = "checkerduck"
+version = "0.0.1"
+description = "SEO Duck's domains checker"
+requires-python = ">=3.13"          # PEP 695 generics: def _label_all[D: HasWord, C]
+dynamic = ["dependencies"]
+
+[project.optional-dependencies]
+dev = ["pytest", "mypy"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+# Dependencies come from the file you already maintain. Keep requirements.txt
+# to plain requirement lines only — no `-e .` (circular) and no `-r`.
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+# `include` is load-bearing: without it, find would also walk tests/, alembic/,
+# frontend/node_modules/ and venv/. The trailing * picks up subpackages
+# (checkerduck.db, checkerduck.extract, ...).
+[tool.setuptools.packages.find]
+include = ["checkerduck*"]
+
+# Non-Python files that ship inside the package. Irrelevant under
+# `pip install -e` (files are read in place) but required for a real build.
+[tool.setuptools.package-data]
+"checkerduck.resources" = ["*.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.12"
+# Start here, then tighten. Even this catches the `return re` class of bug.
+warn_return_any = true
+warn_unused_ignores = true
+check_untyped_defs = true

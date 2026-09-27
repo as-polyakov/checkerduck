@@ -6,6 +6,8 @@ from typing import Any, Callable, Mapping, Sequence
 from checkerduck.extract.ahrefs_models import *
 from checkerduck.extract.lang import get_domain_lang_by_top_traffic
 from checkerduck.model.models import ClassifiedKeyword, ClassifiedBacklink, TargetQueryableDomain
+from checkerduck.extract.client_typed import Fetched, Outcome, Failed
+from checkerduck.extract.cloud_flare_models import RadarCategory
 
 IN, OUT = "in", "out"
 
@@ -22,8 +24,8 @@ def _encode(v: Any) -> Any:
 
 
 def _fields(row_type, skip: Sequence[str] = ()) -> list[str]:
-    return [f.encode_name for f in msgspec.structs.fields(row_type)
-            if f.encode_name not in skip]
+    return [f.name for f in msgspec.structs.fields(row_type)
+            if f.name not in skip]
 
 
 def _values(row, skip: Sequence[str] = ()) -> tuple:
@@ -60,37 +62,45 @@ class Store:
     def _persist(
             self,
             target_id: str,
-            outcomes: Mapping[TargetQueryableDomain, Outcome],
+            outcome: Outcome,
             api: str,
             sql: str,
             params: Callable[[str, Sequence], list[tuple]],
     ) -> None:
-        for domain, outcome in outcomes.items():
-            match outcome:
-                case Fetched(rows=rows) if rows:
-                    with self.conn:
-                        self.conn.executemany(sql, params(domain.domain, rows))
-                case Failed(error=err):
-                    self._error(target_id, domain.domain, api, err)
-                case _:
-                    pass
+        match outcome:
+            case Fetched(domain=domain, rows=rows) if rows:
+                with self.conn:
+                    self.conn.executemany(sql, params(domain, rows))
+            case Failed(domain=domain, error=err):
+                self._error(target_id, domain, api, err)
+            case _:
+                pass
 
     # -------------------------------------------------------- per endpoint
+    def persist_domain_categories_cloudflare(
+            self, target_id: str, outcome: Outcome[RadarCategory]
+    ) -> None:
+        sql = _insert_sql("domain_categories",
+                          ("target_id", "domain"), RadarCategory)
+        self._persist(
+            target_id, outcome, "cloudflare_domain_categories", sql,
+            lambda domain, rows: [(target_id, domain, *_values(r)) for r in rows],
+        )
 
     def persist_metrics_history(
-            self, target_id: str, outcomes: Mapping[TargetQueryableDomain, Outcome[MetricHistoryPoint]]
+            self, target_id: str, outcome: Outcome[MetricHistoryPoint]
     ) -> None:
         sql = _insert_sql("ahrefs_metrics_history",
                           ("target_id", "domain"), MetricHistoryPoint)
         self._persist(
-            target_id, outcomes, "metrics_history", sql,
+            target_id, outcome, "metrics_history", sql,
             lambda domain, rows: [(target_id, domain, *_values(r)) for r in rows],
         )
 
     def persist_top_pages(
             self,
             target_id: str,
-            outcomes: Mapping[TargetQueryableDomain, Outcome[TopPage]],
+            outcome: Outcome[TopPage],
             date: str,
             country_code: str = "",
     ) -> None:
@@ -98,46 +108,37 @@ class Store:
                           ("target_id", "domain", "country_code", "date", "position"),
                           TopPage)
         self._persist(
-            target_id, outcomes, "top_pages", sql,
+            target_id, outcome, "top_pages", sql,
             lambda domain, rows: [(target_id, domain, country_code, date, i + 1, *_values(r))
                                   for i, r in enumerate(rows)],
         )
 
     def persist_organic_keywords(self, target_id: str,
-                                 outcomes: Mapping[TargetQueryableDomain, Outcome[ClassifiedKeyword]],
+                                 outcome: Outcome[ClassifiedKeyword],
                                  date: str) -> None:
         sql = _insert_sql("ahrefs_organic_keywords",
                           ("target_id", "domain", "date"), ClassifiedKeyword)
         self._persist(
-            target_id, outcomes, "organic_keywords", sql,
+            target_id, outcome, "organic_keywords", sql,
             lambda domain, rows: [(target_id, domain, date, *_values(r)) for r in rows],
         )
 
-    def persist_anchors(self, target_id: str,
-                        outcomes: Mapping[TargetQueryableDomain, Outcome[ClassifiedBacklink]]) -> None:
-        sql = _insert_sql("anchors_forbidden_words",
-                          ("target_id", "domain", "direction"), ClassifiedBacklink)
+    def persist_backlinks(self, target_id: str,
+                          outcome: Outcome[ClassifiedBacklink]) -> None:
+        sql = _insert_sql("ahrefs_backlinks",
+                          ("target_id", "domain"), ClassifiedBacklink)
         self._persist(
-            target_id, outcomes, "incoming_anchors", sql,
-            lambda domain, rows: [(target_id, domain, IN, *_values(r)) for r in rows],
-        )
-
-    def persist_incoming_anchors(self, target_id: str,
-                                 outcomes: Mapping[TargetQueryableDomain, Outcome[ClassifiedBacklink]]) -> None:
-        sql = _insert_sql("anchors_forbidden_words",
-                          ("target_id", "domain", "direction"), ClassifiedBacklink)
-        self._persist(
-            target_id, outcomes, "incoming_anchors", sql,
-            lambda domain, rows: [(target_id, domain, IN, *_values(r)) for r in rows],
+            target_id, outcome, "backlinks", sql,
+            lambda domain, rows: [(target_id, domain, *_values(r)) for r in rows],
         )
 
     def persist_outgoing_anchors(
-            self, target_id: str, outcomes: Mapping[TargetQueryableDomain, Outcome[LinkedAnchor]]) -> None:
+            self, target_id: str, outcome: Outcome[LinkedAnchor]) -> None:
         sql = _insert_sql("anchors_forbidden_words",
                           ("target_id", "domain", "direction", "url_from"),
                           LinkedAnchor, ANCHOR_SKIP)
         self._persist(
-            target_id, outcomes, "outgoing_anchors", sql,
+            target_id, outcome, "outgoing_anchors", sql,
             lambda domain, rows: [(target_id, domain, OUT, "", *_values(r, ANCHOR_SKIP))
                                   for r in rows],
         )

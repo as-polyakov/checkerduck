@@ -1,6 +1,8 @@
 from checkerduck.db.db import init_database
 from checkerduck.extract.extractor import DataExtractor
 from checkerduck.db import dao
+from model.models import TargetQueryableDomain
+from rules.seo_rule import DomainCategoryRule, EvalContext
 
 
 def main():
@@ -10,9 +12,18 @@ def main():
     extractor = DataExtractor()
     extractor.run_extract(analysis)
 
+    domains = [TargetQueryableDomain(domain=d.domain) for d in analysis.domains]
+    # domains = [TargetQueryableDomain(domain="bitbucket.org")]
+    # categories = extractor.cloud_flare_client.query_domain_categories(domains)
+    # extractor.store.persist_domain_categories_cloudflare(id, categories)
 
-    # eval_results = [evaluate_domain(id, domain.domain)
-    #                 for domain in analysis.domains]
+
+    rule = DomainCategoryRule("Technology")
+    # rule.test()
+    # print(rule.domain_similarity(["Technology/Technology"], ["Internet Communication"]))
+    # print(rule.domain_similarity(["Technology/Technology"], ["Sports/Sports"]))
+    for d in domains:
+        print(f"Domain {d.domain}, score: {rule.eval(eval_context=EvalContext(id, d.domain)).score}")
 
     # print(f"{eval_results}")
     # for d in ["bitchipdigital.com"]:

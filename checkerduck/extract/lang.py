@@ -1,15 +1,24 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Sequence
 
-import requests
 from bs4 import BeautifulSoup
 import logging
 
 from lingua import LanguageDetectorBuilder
 from checkerduck.extract.ahrefs_models import AnalysedDomain
+from checkerduck.extract.http import new_session
 from checkerduck.resources.langs import get_lang_by_country
 
 logger = logging.Logger(__name__)
+
+# These are arbitrary third-party sites, not an API: dead and parked domains are
+# expected, and lang_by_traffic is a perfectly good fallback. So one cheap retry
+# rather than the API policy — 50 unreachable domains must not cost 50 x 14s.
+# The session also buys connection reuse, which bare requests.get did not.
+_session = new_session(total_retries=1, backoff_factor=0.5)
+
+# (connect, read). Unbounded waits here pin a worker in the 50-thread pool.
+HOMEPAGE_TIMEOUT = (5, 5)
 
 detector = LanguageDetectorBuilder.from_all_languages().build()
 
@@ -33,10 +42,12 @@ def get_domain_lang(domain: str, lang_by_traffic: str) -> str:
     lang = None
     try:
         try:
-            response = requests.get(f"https://{domain}", headers=headers, verify=False)
+            response = _session.get(f"https://{domain}", headers=headers, verify=False,
+                                    timeout=HOMEPAGE_TIMEOUT)
         except Exception as e:
             logger.warning(f"Failed to get {domain}: {e}, trying http://{domain}")
-            response = requests.get(f"http://{domain}", headers=headers, verify=False)
+            response = _session.get(f"http://{domain}", headers=headers, verify=False,
+                                    timeout=HOMEPAGE_TIMEOUT)
 
         soup = BeautifulSoup(response.text, "html.parser")
         html_desc = soup.find("meta", attrs={"name": "description"})
@@ -57,21 +68,6 @@ def build_lang_by_typed_domain(analyzed_domains: Sequence[AnalysedDomain]):
                                 executor.submit(get_domain_lang, tgt.domain,
                                                 get_domain_lang_by_top_traffic(tgt.metrics.org_traffic_top_by_country))
                             for tgt in analyzed_domains}
-        for domain, future in future_to_domain.items():
-            try:
-                lang_by_domain[domain] = future.result()
-            except Exception as e:
-                # handle or log failure gracefully
-                print(f"Failed to get lang for {domain}: {e}")
-    return lang_by_domain
-
-def build_lang_by_domain(batch_analysis_results):
-    lang_by_domain = {}
-    with ThreadPoolExecutor(max_workers=50) as executor:
-        future_to_domain = {tgt["domain"]:
-                                executor.submit(get_domain_lang, tgt['domain'],
-                                                get_domain_lang_by_top_traffic(tgt['org_traffic_top_by_country']))
-                            for tgt in batch_analysis_results['targets']}
         for domain, future in future_to_domain.items():
             try:
                 lang_by_domain[domain] = future.result()

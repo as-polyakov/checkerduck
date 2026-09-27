@@ -8,17 +8,30 @@ from scipy import signal
 from scipy.stats import linregress
 
 from checkerduck.db import dao
-from checkerduck.db.dao import get_domain_dr, get_domain_traffic_by_country, get_domain_traffic_by_date, get_in_out_num_domains, \
-    get_top_pages_traffic, get_anchors_forbidden_words, get_organic_keywords_forbidden_words, get_domain_category
+from checkerduck.db.dao import get_domain_dr, get_domain_traffic_by_country, get_domain_traffic_by_date, \
+    get_in_out_num_domains, \
+    get_top_pages_traffic, get_anchors_forbidden_words, get_organic_keywords_forbidden_words, get_domain_categories
 from checkerduck.db import db
 from checkerduck.model.models import RuleEvaluation
 from checkerduck.resources.disallowed_words import ForbiddenWordCategory
+from sentence_transformers import SentenceTransformer
 
 
 @dataclass
 class EvalContext:
     target_id: str
     domain: str
+
+
+@dataclass
+class GeographyRuleConfig:
+    """Knobs for GeographyRule. Edit in a notebook via RuleConfiguration.geography."""
+    top_n_countries: Literal[1, 3] = 1
+
+
+class RuleConfiguration:
+    """Central place for per-rule tunable knobs, so they can be tweaked from a notebook."""
+    geography = GeographyRuleConfig()
 
 
 class SeoRule(ABC):
@@ -159,9 +172,11 @@ class GeographyRule(SeoRule):
         }
 
     def eval(self, eval_context: EvalContext) -> RuleEvaluation:
-        country = dao.get_domain_top_traffic_geography(eval_context.target_id, eval_context.domain)
-        score = 1 if country in self.tiers_by_country.keys() else 0
-        critical_violation = country not in self.tiers_by_country
+        top_countries = dao.get_domain_top_traffic_geographies(
+            eval_context.target_id, eval_context.domain, RuleConfiguration.geography.top_n_countries)
+        matches = any(country in self.tiers_by_country for country in top_countries)
+        score = 1 if matches else 0
+        critical_violation = not matches
         return RuleEvaluation(eval_context.domain, self.__class__.__name__, score, critical_violation, "")
 
 
@@ -224,16 +239,14 @@ class ForbiddenWordsBacklinksRule(SeoRule):
             area="safety",
             deal_breaker=True
         )
-        self.max_count = 50
+        self.percent_mult = 3
 
     def eval(self, eval_context: EvalContext) -> RuleEvaluation:
-        res = get_anchors_forbidden_words(eval_context.target_id, eval_context.domain,
-                                          db.LinkDirection.IN, ForbiddenWordCategory.FORBIDDEN)
+        res = dao.get_backlinks(eval_context.target_id, eval_context.domain)
 
-        violation_count = len(res)
-        score = max(0.0, 1 - violation_count / self.max_count)
-        return RuleEvaluation(eval_context.domain, self.__class__.__name__, score,
-                              True if violation_count >= self.max_count else False, "")
+        spam_backlinks = sum(1 for d in res if d["is_spam"] == "1")
+        score = max(0.0, 1 - self.percent_mult * spam_backlinks / len(res))
+        return RuleEvaluation(eval_context.domain, self.__class__.__name__, score, False, "")
 
 
 class SpamWordsAnchorsRule(SeoRule):
@@ -313,7 +326,7 @@ class SpamWordsOrganicKeywordsRule(SeoRule):
 
     def __init__(self, weight: float = 1.0, forbidden_words: list = None):
         super().__init__(
-            name="Forbidden Words in Organic Keywords",
+            name="Spam Words in Organic Keywords",
             weight=weight,
             area="safety",
             deal_breaker=True
@@ -337,18 +350,36 @@ class SpamWordsOrganicKeywordsRule(SeoRule):
 
 
 class DomainCategoryRule(SeoRule):
-    """Checks for forbidden words in organic keywords"""
 
-    def __init__(self, weight: float = 1.0, forbidden_words: list = None):
+    model = SentenceTransformer("Qwen/Qwen3-Embedding-0.6B")
+
+    def __init__(self, tgt_category: str, weight: float = 1.0):
         super().__init__(
-            name="Forbidden Words in Organic Keywords",
+            name="Domain categories",
             weight=weight,
             area="safety",
             deal_breaker=True
         )
+        self.tgt_category = tgt_category
+
+    def domain_similarity(self,
+            categories_a: list[str],
+            categories_b: list[str],
+    ) -> float:
+        embeddings_a = self.model.encode(categories_a)
+        embeddings_b = self.model.encode(categories_b)
+
+        embeddings_a /= np.linalg.norm(embeddings_a, axis=1, keepdims=True)
+        embeddings_b /= np.linalg.norm(embeddings_b, axis=1, keepdims=True)
+
+        similarities = embeddings_a @ embeddings_b.T
+
+        return float(np.average(similarities))
 
     def eval(self, eval_context: EvalContext) -> RuleEvaluation:
-        # keyword, keyword_country, is_best_position_set_top_3, is_best_position_set_top_4_10, is_best_position_set_top_11_50, best_position_url
-        category = get_domain_category(eval_context.target_id, eval_context.domain)
+        tgt_categories = ["Technology"]
+        categories = [c.full_category() for c in get_domain_categories(eval_context.target_id, eval_context.domain)]
+        print(f"domain {eval_context.domain}, category {categories}")
 
-        return RuleEvaluation(eval_context.domain, self.__class__.__name__, 1, False, "")
+        return RuleEvaluation(eval_context.domain, self.__class__.__name__,
+                              self.domain_similarity(tgt_categories, categories), False, "")

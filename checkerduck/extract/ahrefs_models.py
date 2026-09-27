@@ -38,8 +38,6 @@ from typing import Literal, TypeVar
 import msgspec
 from msgspec import Struct
 
-T = TypeVar("T")
-
 
 def select_for(row_type: type[Struct]) -> str:
     return ",".join(f.encode_name for f in msgspec.structs.fields(row_type))
@@ -76,7 +74,6 @@ class OrganicKeywordsResponse(Struct, frozen=True):
     keywords: list[OrganicKeyword] = []
 
 
-
 # --------------------------------------------------------------------------
 # GET /v3/site-explorer/top-pages   ->  {"pages": [...]}
 # --------------------------------------------------------------------------
@@ -108,11 +105,82 @@ class MetricsHistoryResponse(Struct, frozen=True):
 # GET /v3/site-explorer/all-backlinks   ->  {"backlinks": [...]}
 # --------------------------------------------------------------------------
 class Backlink(Struct, frozen=True, kw_only=True):
+    ahrefs_rank_source: int
+    ahrefs_rank_target: int
+    alt: str | None
     anchor: str
-    title: str
-    url_from: str
+    broken_redirect_new_target: str | None
+    broken_redirect_reason: str | None
+    broken_redirect_source: str | None
+    class_c: int
+    discovered_status: str | None
+    domain_rating_source: float
+    domain_rating_target: float
+    drop_reason: str | None
+    encoding: str
+    first_seen: str
+    first_seen_link: str
+    http_code: int
+    http_crawl: bool
+    ip_source: str | None
+    is_alternate: bool
+    is_canonical: bool
+    is_content: bool
+    is_dofollow: bool
+    is_form: bool
+    is_frame: bool
+    is_image: bool
+    is_lost: bool
+    is_new: bool
+    is_nofollow: bool
+    is_redirect: bool
+    is_redirect_lost: bool
+    is_root_source: bool
+    is_root_target: bool
+    is_rss: bool
+    is_spam: bool
+    is_sponsored: bool
+    is_text: bool
+    is_ugc: bool
+    js_crawl: bool
+    last_seen: str | None
+    last_visited: str
+    link_group_count: int
+    link_type: str
+    linked_domains_source_domain: int
+    linked_domains_source_page: int
+    linked_domains_target_domain: int
+    links_external: int
+    links_internal: int
+    lost_reason: str | None
+    name_source: str
+    name_target: str
+    noindex: bool
+    page_category_source: str | None
+    page_size: int
+    page_type_source: str | None
+    port_source: int
+    port_target: int
+    positions: int
+    redirect_code: int | None
+    refdomains_source: int
+    refdomains_source_domain: int
+    refdomains_target_domain: int
+    root_name_source: str
+    root_name_target: str
     snippet_left: str
     snippet_right: str
+    source_page_author: str | None
+    source_page_publish_date: str | None
+    title: str
+    tld_class_source: str
+    tld_class_target: str
+    traffic: int
+    traffic_domain: int
+    url_from: str
+    url_from_plain: str
+    url_rating_source: float
+    url_to: str
 
     def get_word(self) -> str | None:
         return self.anchor
@@ -120,7 +188,6 @@ class Backlink(Struct, frozen=True, kw_only=True):
 
 class BacklinksResponse(Struct, frozen=True):
     backlinks: list[Backlink] = []
-
 
 
 # --------------------------------------------------------------------------
@@ -136,7 +203,6 @@ class LinkedAnchor(Struct, frozen=True, kw_only=True):
 
 class LinkedAnchorsResponse(Struct, frozen=True):
     linkedanchors: list[LinkedAnchor] = []
-
 
 
 # --------------------------------------------------------------------------
@@ -199,23 +265,3 @@ class AnalysedDomain(Struct, frozen=True, kw_only=True):
         return cls(domain=url_to_domain(target.url), metrics=target)
 
 
-@dataclass(frozen=True)
-class Fetched[R]:
-    domain: str
-    rows: list[R]
-    truncated: bool = False
-
-
-@dataclass(frozen=True)
-class NoData:
-    domain: str
-
-
-@dataclass(frozen=True)
-class Failed:
-    domain: str
-    error: str
-    status: int | None = None
-
-
-type Outcome[R] = Fetched[R] | NoData | Failed

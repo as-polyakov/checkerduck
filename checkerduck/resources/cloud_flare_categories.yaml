@@ -1,0 +1,233 @@
+categories:
+  1:
+    name: "Ads"
+    subcategories:
+      66: "Advertisements"
+
+  2:
+    name: "Adult Themes"
+    subcategories:
+      67: "Adult Themes"
+      125: "Nudity"
+      133: "Pornography"
+
+  3:
+    name: "Business & Economy"
+    subcategories:
+      186: "Brokerage & Investing"
+      75: "Business"
+      89: "Economy & Finance"
+      183: "Cryptocurrency"
+      185: "Personal Finance"
+
+  6:
+    name: "Education"
+    subcategories:
+      90: "Education"
+      91: "Educational Institutions"
+      189: "Reference"
+      144: "Science"
+      150: "Space & Astronomy"
+
+  7:
+    name: "Entertainment"
+    subcategories:
+      70: "Arts"
+      74: "Audio Streaming"
+      76: "Cartoons & Anime"
+      79: "Comic Books"
+      92: "Entertainment"
+      96: "Fine Art"
+      100: "Gaming"
+      106: "Home Video/DVD"
+      107: "Humor"
+      116: "Magazines"
+      120: "Movies"
+      121: "Music"
+      122: "News & Media"
+      127: "Paranormal"
+      139: "Radio"
+      156: "Television"
+      164: "Video Streaming"
+
+  8:
+    name: "Gambling"
+    subcategories:
+      99: "Gambling"
+
+  9:
+    name: "Government & Politics"
+    subcategories:
+      190: "Charity and Non-profit"
+      101: "Government/Legal"
+      137: "Politics, Advocacy, and Government-Related"
+
+  10:
+    name: "Health"
+    subcategories:
+      103: "Health & Fitness"
+      146: "Sex Education"
+
+  12:
+    name: "Internet Communication"
+    subcategories:
+      77: "Chat"
+      98: "Forums"
+      108: "Information Security"
+      110: "Instant Messengers"
+      111: "Internet Phone & VOIP"
+      118: "Messaging"
+      126: "P2P"
+      129: "Personal Blogs"
+      168: "Webmail"
+      172: "Photo Sharing"
+
+  13:
+    name: "Job Search & Careers"
+    subcategories:
+      113: "Job Search & Careers"
+
+  15:
+    name: "Miscellaneous"
+    subcategories:
+      115: "Login Screens"
+      119: "Miscellaneous"
+      124: "No Content"
+      141: "URL Alias/Redirect"
+      161: "Unreachable"
+
+  17:
+    name: "Questionable Content"
+    subcategories:
+      85: "Deceptive Ads"
+      87: "Drugs"
+      102: "Hacking"
+      135: "Profanity"
+      138: "Questionable Activities"
+      157: "Militancy, Hate & Extremism"
+      162: "Unreliable Information"
+
+  18:
+    name: "Real Estate"
+    subcategories:
+      140: "Real Estate"
+
+  19:
+    name: "Religion"
+    subcategories:
+      142: "Religion & Spirituality"
+
+  20:
+    name: "Safe for Kids"
+    subcategories:
+      143: "Safe for Kids"
+
+  21:
+    name: "Security threats"
+    subcategories:
+      68: "Anonymizer"
+      80: "Command and Control & Botnet"
+      187: "Compromised Domain"
+      83: "Cryptomining"
+      117: "Malware"
+      131: "Phishing"
+      188: "Potentially unwanted software"
+      134: "Private IP Address"
+      151: "Spam"
+      153: "Spyware"
+      175: "DNS Tunneling"
+      176: "Domain Generation Algorithm"
+      178: "Brand Embedding"
+      191: "Scam"
+
+  22:
+    name: "Shopping & Auctions"
+    subcategories:
+      73: "Auctions & Marketplaces"
+      82: "Coupons"
+      88: "Ecommerce"
+      148: "Shopping"
+
+  24:
+    name: "Society & Lifestyle"
+    subcategories:
+      71: "Arts & Crafts"
+      72: "Astrology"
+      78: "Clothing"
+      84: "Dating & Relationships"
+      86: "Digital Postcards"
+      93: "Parenting"
+      94: "Fashion"
+      97: "Food & Drink"
+      104: "Hobbies & Interests"
+      105: "Home & Garden"
+      114: "Lifestyle"
+      130: "Pets"
+      132: "Photography"
+      136: "Professional Networking"
+      147: "Sexuality"
+      149: "Social Networks"
+      154: "Swimsuits"
+      158: "Tobacco"
+      173: "Body Art"
+      174: "Lingerie & Bikini"
+      181: "Alcohol"
+
+  25:
+    name: "Sports"
+    subcategories:
+      152: "Sports"
+
+  26:
+    name: "Technology"
+    subcategories:
+      69: "APIs"
+      81: "Content Servers"
+      95: "File Sharing"
+      109: "Information Technology"
+      123: "News, Portal & Search"
+      145: "Search Engines"
+      155: "Technology"
+      159: "Translator"
+      184: "Artificial Intelligence"
+      192: "Remote Access"
+      193: "Shareware/Freeware"
+      194: "Keep Awake Software"
+
+  27:
+    name: "Travel"
+    subcategories:
+      160: "Travel"
+
+  28:
+    name: "Vehicles"
+    subcategories:
+      163: "Vehicles"
+
+  29:
+    name: "Violence"
+    subcategories:
+      165: "Violence"
+      166: "Weapons"
+
+  30:
+    name: "Weather"
+    subcategories:
+      167: "Weather"
+
+  31:
+    name: "Always blocked"
+    subcategories:
+      170: "Child Abuse"
+
+  32:
+    name: "Security Risks"
+    subcategories:
+      128: "Parked & For Sale Domains"
+      169: "New Domains"
+      177: "Newly Seen Domains"
+
+  34:
+    name: "CIPA"
+    subcategories:
+      182: "CIPA Filter"
