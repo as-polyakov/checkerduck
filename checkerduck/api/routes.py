@@ -1,11 +1,14 @@
 """
 API routes for SEO Domain Checker
 """
+import logging
 import traceback
 from functools import wraps
 from typing import List, Callable, Any
 
 from fastapi import APIRouter, HTTPException, status
+
+log = logging.getLogger(__name__)
 
 from checkerduck.db import dao
 from checkerduck.api.analysis_service import (
@@ -42,9 +45,7 @@ def handle_exceptions(func: Callable) -> Callable:
             stack = traceback.format_exc()
             error_detail = f"Error: {str(e)}\n\nStacktrace:\n{stack}"
 
-            # Log to console for server-side debugging
-            print(f"Exception in {func.__name__}:")
-            print(error_detail)
+            log.error("exception in %s:\n%s", func.__name__, error_detail)
 
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

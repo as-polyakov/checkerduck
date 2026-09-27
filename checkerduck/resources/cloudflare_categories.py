@@ -1,9 +1,13 @@
+import logging
+
 import yaml
 from importlib import resources as resources
 
+log = logging.getLogger(__name__)
+
 
 class CloudFlareCategory:
-    _categories = yaml.safe_load(resources.files("checkerduck.resources").joinpath("cloud_flare_categories.yaml").read_text())
+    _categories = yaml.safe_load(resources.files("checkerduck.resources").joinpath("cloudflare_categories.yaml").read_text())
 
     _all_categories = {k: v['name'] for k, v in _categories['categories'].items()}
 
@@ -34,4 +38,4 @@ class CloudFlareCategory:
 
 if __name__ == "__main__":
     c = CloudFlareCategory.get_category_name(30)
-    print(c)
+    log.debug("%s", c)

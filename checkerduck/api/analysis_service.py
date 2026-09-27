@@ -1,6 +1,7 @@
 """
 Service layer for analysis operations
 """
+import logging
 import threading
 import uuid
 from datetime import datetime
@@ -13,6 +14,9 @@ from checkerduck.model.models import AnalysisDomain
 from checkerduck.rules.rule_aggregator import evaluate_domain
 from checkerduck.domain.utils import safe_int
 from checkerduck.db import dao
+
+
+log = logging.getLogger(__name__)
 
 
 def create_analysis(request: StartAnalysisRequest) -> AnalysisResponse:
@@ -70,4 +74,4 @@ def run_analysis(analysis: Analysis):
 
     dao.persist_rule_evaluations(analysis.target_id, eval_results)
     dao.update_analysis_status(analysis.target_id, AnalysisStatus.COMPLETED)
-    print(f"Analysis {analysis.target_id} completed successfully")
+    log.info("analysis %s completed", analysis.target_id)

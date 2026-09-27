@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import logging
 import sqlite3
 from typing import Any, Callable, Mapping, Sequence
 
+from checkerduck import domain
 from checkerduck.extract.ahrefs_models import *
 from checkerduck.extract.lang import get_domain_lang_by_top_traffic
 from checkerduck.model.models import ClassifiedKeyword, ClassifiedBacklink, TargetQueryableDomain
-from checkerduck.extract.client_typed import Fetched, Outcome, Failed
+from checkerduck.extract.client_typed import Fetched, Outcome, Failed, NoData
 from checkerduck.extract.cloud_flare_models import RadarCategory
+
+log = logging.getLogger(__name__)
 
 IN, OUT = "in", "out"
 
@@ -73,19 +77,22 @@ class Store:
                     self.conn.executemany(sql, params(domain, rows))
             case Failed(domain=domain, error=err):
                 self._error(target_id, domain, api, err)
+            case NoData(domain=domain):
+                log.debug("%s: no data from %s", domain, api)
             case _:
-                pass
+                raise TypeError(f"Unexpected outcome type: {type(outcome).__name__}")
 
     # -------------------------------------------------------- per endpoint
     def persist_domain_categories_cloudflare(
-            self, target_id: str, outcome: Outcome[RadarCategory]
+            self, target_id: str, outcomes: Mapping[TargetQueryableDomain, Outcome[RadarCategory]]
     ) -> None:
         sql = _insert_sql("domain_categories",
                           ("target_id", "domain"), RadarCategory)
-        self._persist(
-            target_id, outcome, "cloudflare_domain_categories", sql,
-            lambda domain, rows: [(target_id, domain, *_values(r)) for r in rows],
-        )
+        for queryable_domain, outcome in outcomes.items():
+            self._persist(
+                target_id, outcome, "cloudflare_domain_categories", sql,
+                lambda domain, rows: [(target_id, domain, *_values(r)) for r in rows],
+            )
 
     def persist_metrics_history(
             self, target_id: str, outcome: Outcome[MetricHistoryPoint]

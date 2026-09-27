@@ -1,7 +1,10 @@
 import json
+import logging
 from typing import List
 
 import requests
+
+log = logging.getLogger(__name__)
 
 PROMPT_CLASSIFICATION_TEMPLATE = """
 You are an SEO analyst.
@@ -272,4 +275,4 @@ class OllamaClient:
 if __name__ == "__main__":
     client = OllamaClient(None, None, CATEGORIES)
     res = client.classify_content("The latest technology news and reviews, covering computing, home entertainment systems, gadgets and more")
-    print(json.dumps(res, indent=2, ensure_ascii=False))
+    log.info("%s", json.dumps(res, indent=2, ensure_ascii=False))

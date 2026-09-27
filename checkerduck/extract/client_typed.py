@@ -1,3 +1,4 @@
+import logging
 from dataclasses import replace, dataclass
 from typing import Any, Callable, Collection, Self, Mapping, Sequence
 
@@ -5,7 +6,13 @@ import msgspec
 import requests
 
 from checkerduck.extract.http import new_session
+from checkerduck.log import HTTP_LOGGER
 from checkerduck.model.models import TargetQueryableDomain
+
+log = logging.getLogger(HTTP_LOGGER)
+
+# How much of a raw body to log. CHECKERDUCK_HTTP_DEBUG=1 turns the debug line on.
+BODY_CHARS = 2000
 
 
 def construct_field_or(field: str, conditions: Collection) -> dict:
@@ -70,25 +77,22 @@ class TypedHTTPJSONClient:
             }
         )
 
-    def _get_bytes(self, endpoint: str, params: dict[str, Any]) -> bytes:
-        r = self.session.get(f"{self.base_url}{endpoint}", params=params, timeout=self.timeout)
+    def _request(self, method: str, endpoint: str, **kwargs) -> bytes:
+        r = self.session.request(method, f"{self.base_url}{endpoint}",
+                                 timeout=self.timeout, **kwargs)
         if not r.ok:
-            print("URL:", r.url)
-            print("Status:", r.status_code)
-            print("Response headers:", dict(r.headers))
-            print("Response body:", r.text)
+            log.warning("%s %s -> %s %s", method, r.url, r.status_code, r.text[:BODY_CHARS])
+        elif log.isEnabledFor(logging.DEBUG):
+            # r.text is not free on a 100KB backlinks page; only build it in debug.
+            log.debug("%s %s -> %s %s", method, r.url, r.status_code, r.text[:BODY_CHARS])
         r.raise_for_status()
         return r.content
 
+    def _get_bytes(self, endpoint: str, params: dict[str, Any]) -> bytes:
+        return self._request("GET", endpoint, params=params)
+
     def _post_bytes(self, endpoint: str, payload: dict[str, Any]) -> bytes:
-        r = self.session.post(f"{self.base_url}{endpoint}", json=payload, timeout=self.timeout)
-        if not r.ok:
-            print("URL:", r.url)
-            print("Status:", r.status_code)
-            print("Response headers:", dict(r.headers))
-            print("Response body:", r.text)
-        r.raise_for_status()
-        return r.content
+        return self._request("POST", endpoint, json=payload)
 
     def _fetch_bulk_domain_rows[E, R](self, domains: Sequence[TargetQueryableDomain], endpoint: Endpoint[E, R],
                                       params: dict) -> Mapping[TargetQueryableDomain, Outcome[R]]:

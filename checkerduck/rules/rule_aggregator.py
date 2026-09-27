@@ -1,7 +1,10 @@
+import logging
 import traceback
 from typing import List
 
 from checkerduck.rules.seo_rule import *
+
+log = logging.getLogger(__name__)
 
 
 def evaluate_domain(target_id: str, domain: str) -> List[RuleEvaluation]:
@@ -24,5 +27,5 @@ def evaluate_domain(target_id: str, domain: str) -> List[RuleEvaluation]:
         return results + [RuleEvaluation(domain, "overall", avg_score, critical_violation, "")]
     except Exception as e:
         traceback.print_exc()
-        print(f"Failed to evaluate domain {domain}: {e}")
+        log.exception("%s: evaluation failed", domain)
         raise

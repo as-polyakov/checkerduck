@@ -1,5 +1,6 @@
 import datetime
 import json
+import logging
 import os
 import time
 from typing import Dict, Any
@@ -8,8 +9,10 @@ import requests
 
 from checkerduck.extract.http import new_session
 
+log = logging.getLogger(__name__)
+
 def cache(cache_name, results: Dict[str, Any], cache_dir: str = "cache") -> str:
-    print("\nSaving results to cache...")
+
     os.makedirs(cache_dir, exist_ok=True)
 
     # Generate filename with timestamp
@@ -19,7 +22,7 @@ def cache(cache_name, results: Dict[str, Any], cache_dir: str = "cache") -> str:
 
     with open(cache_filepath, 'w', encoding='utf-8') as f:
         json.dump(results, f, indent=2, ensure_ascii=False)
-    print(f"Results saved to cache file: {cache_filepath}")
+    log.debug("cached %s", cache_filepath)
 
     return cache_filepath
 

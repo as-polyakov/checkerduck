@@ -1,3 +1,4 @@
+import logging
 import os
 import sqlite3
 import threading
@@ -13,6 +14,8 @@ class LinkDirection(str, Enum):
     OUT = "out"
 
 
+log = logging.getLogger(__name__)
+
 DB_PATH = os.environ.get("CHECKERDUCK_DB", os.path.join(os.path.abspath(os.getcwd()), "ahrefs_data.db"))
 
 _thread_local = threading.local()
@@ -21,7 +24,7 @@ _db_path: str = ""
 
 
 def init_database(db_path: str = DB_PATH, alembic_ini_path: str = "alembic.ini"):
-    print("Initializing database...")
+    log.info("initializing database")
     if not db_path:
         raise RuntimeError("Database not configured. Provide db_path during initialization.")
     db_url = f"sqlite:///{db_path}"
@@ -32,14 +35,14 @@ def init_database(db_path: str = DB_PATH, alembic_ini_path: str = "alembic.ini")
         #     "script_location",
         #     str(package_dir / "migrations"),
         # )
-        print(alembic_cfg.get_alembic_option("script_location"))
+        log.debug("alembic script_location=%s", alembic_cfg.get_alembic_option("script_location"))
         alembic_cfg.set_main_option("sqlalchemy.url", db_url)
         command.upgrade(alembic_cfg, "head")
     global _db_path
     _db_path = db_path
     global _db_initialized
     _db_initialized = True
-    print("Initialized database.")
+    log.info("database ready: %s", db_path)
 
 
 def get_thread_connection() -> Connection:

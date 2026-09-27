@@ -9,7 +9,7 @@ from checkerduck.extract.ahrefs_models import AnalysedDomain
 from checkerduck.extract.http import new_session
 from checkerduck.resources.langs import get_lang_by_country
 
-logger = logging.Logger(__name__)
+log = logging.getLogger(__name__)
 
 # These are arbitrary third-party sites, not an API: dead and parked domains are
 # expected, and lang_by_traffic is a perfectly good fallback. So one cheap retry
@@ -29,7 +29,7 @@ def get_domain_lang_by_top_traffic(top_country_by_traffic: List[tuple[str, int]]
 
 
 def get_domain_lang(domain: str, lang_by_traffic: str) -> str:
-    print(f"Get domain lang for {domain}")
+    log.debug("%s: detecting lang", domain)
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                       "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -45,7 +45,7 @@ def get_domain_lang(domain: str, lang_by_traffic: str) -> str:
             response = _session.get(f"https://{domain}", headers=headers, verify=False,
                                     timeout=HOMEPAGE_TIMEOUT)
         except Exception as e:
-            logger.warning(f"Failed to get {domain}: {e}, trying http://{domain}")
+            log.debug("%s: https failed (%s), trying http", domain, e)
             response = _session.get(f"http://{domain}", headers=headers, verify=False,
                                     timeout=HOMEPAGE_TIMEOUT)
 
@@ -55,9 +55,9 @@ def get_domain_lang(domain: str, lang_by_traffic: str) -> str:
         if html_desc:
             lang = detector.detect_language_of(html_desc).iso_code_639_1.name.lower()
     except Exception as e:
-        logger.info(f"No language found for {domain}, fallback to using top 1 country by traffic")
+        log.debug("%s: no lang in page, falling back to top-traffic country", domain)
     lang = lang if lang is not None else lang_by_traffic
-    print(f"Domain: {domain}, lang: {lang}")
+    log.debug("%s: lang=%s", domain, lang)
     return lang
 
 
@@ -73,5 +73,5 @@ def build_lang_by_typed_domain(analyzed_domains: Sequence[AnalysedDomain]):
                 lang_by_domain[domain] = future.result()
             except Exception as e:
                 # handle or log failure gracefully
-                print(f"Failed to get lang for {domain}: {e}")
+                log.warning("%s: lang detection failed: %s", domain, e)
     return lang_by_domain

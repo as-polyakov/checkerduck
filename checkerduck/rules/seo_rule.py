@@ -16,6 +16,8 @@ from checkerduck.model.models import RuleEvaluation
 from checkerduck.resources.disallowed_words import ForbiddenWordCategory
 from sentence_transformers import SentenceTransformer
 
+log = logging.getLogger(__name__)
+
 
 @dataclass
 class EvalContext:
@@ -57,7 +59,7 @@ class SeoRule(ABC):
         try:
             return self.eval(eval_context)
         except Exception as e:
-            logging.warning(f"Rule {self.name} failed during evaluation for context {eval_context}: {e}")
+            log.warning("rule %s failed for %s: %s", self.name, eval_context.domain, e)
             return RuleEvaluation(eval_context.domain, self.name, score=0.0, critical_violation=False, details=str(e))
 
 
@@ -379,7 +381,7 @@ class DomainCategoryRule(SeoRule):
     def eval(self, eval_context: EvalContext) -> RuleEvaluation:
         tgt_categories = ["Technology"]
         categories = [c.full_category() for c in get_domain_categories(eval_context.target_id, eval_context.domain)]
-        print(f"domain {eval_context.domain}, category {categories}")
+        log.debug("%s: categories=%s", eval_context.domain, categories)
 
         return RuleEvaluation(eval_context.domain, self.__class__.__name__,
                               self.domain_similarity(tgt_categories, categories), False, "")

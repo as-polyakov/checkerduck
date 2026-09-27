@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import logging
 import os
 import time
-import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from typing import Mapping, Sequence, Callable
@@ -18,6 +18,8 @@ from checkerduck.model.models import TargetQueryableDomain, HasWord, ClassifiedB
     ClassifiedKeyword
 from checkerduck.db.store import Store
 from checkerduck.extract.cloud_flare_client_typed import TypedCloudFlareClient
+
+log = logging.getLogger(__name__)
 
 PROGRESS_INTERVAL_S = 2.0
 DATE_FROM = "2026-01-01"
@@ -37,26 +39,28 @@ class DataExtractor:
 
         domains = [TargetQueryableDomain(domain=d.domain) for d in analysis.domains]
         if not domains:
-            print(f"{target_id}: no domains, nothing to do")
+            log.info("%s: no domains, nothing to do", target_id)
             return
 
         try:
+            log.info("%s: querying categories %d domains", target_id, len(domains))
             categories = self.cloud_flare_client.query_domain_categories(domains)
             self.store.persist_domain_categories_cloudflare(target_id, categories)
+            log.info("%s: saved %d categories for %d domains", target_id, len(categories), len(domains))
 
-            print(f"{target_id}: batch analysis for {len(domains)} domains...")
+            log.info("%s: batch analysis for %d domains", target_id, len(domains))
             analysed = self.ahrefs_client.batch_analysis(domains)
             lang_by_domain = build_lang_by_typed_domain(analysed)
 
             self.store.persist_batch_analysis(target_id, analysed, lang_by_domain)
-            print(f"{target_id}: saved {len(analysed)} batch-analysis rows")
+            log.info("%s: saved %d batch-analysis rows", target_id, len(analysed))
 
             update_targets_with_lang(domains, lang_by_domain)
             words_by_cat_by_lang = get_category_forbidden_words_by_lang(domains)
 
             # self.process_single_domain(analysis.target_id, domains[0], words_by_cat_by_lang)
             results, failures = self.process_all_domains(target_id, domains, words_by_cat_by_lang)
-            print(f"{target_id}: extracted, ok={len(results)} failed={len(failures)}")
+            log.info("%s: extracted, ok=%d failed=%d", target_id, len(results), len(failures))
 
             # sim_web_report_id = self.similar_web_client.submit_request_report(
             #     [d.domain for d in domains])["report_id"]
@@ -65,7 +69,7 @@ class DataExtractor:
             # store.persist_domain_categories(target_id, categories)
 
         except Exception:
-            print(traceback.format_exc())
+            log.exception("%s: extract failed", target_id)
             raise
 
     # ------------------------------------------------------- fan out
@@ -90,7 +94,7 @@ class DataExtractor:
                 try:
                     results.append((domain, future.result()))
                 except Exception as e:
-                    print(traceback.format_exc())
+                    log.exception("%s: failed", domain.domain)
                     failures.append((domain, e))
                 finally:
                     done += 1
@@ -112,7 +116,7 @@ class DataExtractor:
         client = self.ahrefs_client
         query_date = date.today().strftime("%Y-%m-%d")
 
-        print(f"{domain.domain}: querying...")
+        log.debug("%s: querying", domain.domain)
         metrics = client.query_metric_history(domain, DATE_FROM)
         pages = client.query_top_pages(domain, query_date)
         raw_backlinks = client.query_backlinks(domain)
@@ -123,13 +127,13 @@ class DataExtractor:
         classified_anchors = self._label_all(domain, outgoing_anchors, ClassifiedAnchor.of, words_by_category_by_lang)
         classified_keywords = self._label_all(domain, organic_keywords, ClassifiedKeyword.of, words_by_category_by_lang)
 
-        print(f"{domain.domain}: persisting...")
+        log.debug("%s: persisting", domain.domain)
         self.store.persist_metrics_history(target_id, metrics)
         self.store.persist_top_pages(target_id, pages, query_date)
         self.store.persist_backlinks(target_id, classified_backlinks)
         self.store.persist_outgoing_anchors(target_id, classified_anchors)
         self.store.persist_organic_keywords(target_id, classified_keywords, query_date)
-        print(f"{domain.domain}: done")
+        log.debug("%s: done", domain.domain)
 
     def _label_all[D: HasWord, C](self, domain: TargetQueryableDomain, outcome: Outcome[D],
                                   into: Callable[[D, str | None], C],

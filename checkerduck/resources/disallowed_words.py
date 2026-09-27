@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from enum import Enum
 from importlib import resources as resources
 from typing import Dict, Any, Sequence
@@ -7,6 +8,8 @@ from typing import Dict, Any, Sequence
 import yaml
 
 from checkerduck.model.models import TargetQueryableDomain
+
+log = logging.getLogger(__name__)
 
 
 class ForbiddenWordCategory(str, Enum):
@@ -32,6 +35,6 @@ def get_disallowed_words_by_lang_fallback(disallowed_words_by_lang: Dict[str, Di
     fallback_language = "en"
     l = lang
     if lang not in disallowed_words_by_lang:
-        print(f"Warning, no disallowed words found for lang {lang}, using fallback language {fallback_language}")
+        log.warning("no disallowed words for lang %s, falling back to %s", lang, fallback_language)
         l = fallback_language
     return disallowed_words_by_lang[l]

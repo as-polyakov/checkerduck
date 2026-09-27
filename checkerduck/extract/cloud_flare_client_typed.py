@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import Sequence, Mapping
 
@@ -9,8 +10,11 @@ from checkerduck.extract.cloud_flare_models import RadarDomainResponse, RadarCat
 from checkerduck.model.models import TargetQueryableDomain
 
 
+log = logging.getLogger(__name__)
+
+
 def extract_categories(response: RadarDomainResponse) -> Mapping[str, list[RadarCategory]]:
-    return {d.domain: d.content_categories for d in response.result}
+    return {d.domain: d.all_content_categories() for d in response.result}
 
 
 class TypedCloudFlareClient(TypedHTTPJSONClient):
@@ -42,5 +46,5 @@ if __name__ == "__main__":
 
     match res[domain]:
         case Fetched(val) as f:
-            print(f.rows)
+            log.info("%s", f.rows)
     store.persist_domain_categories_cloudflare("---", res)
