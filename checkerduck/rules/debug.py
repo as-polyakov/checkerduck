@@ -25,6 +25,7 @@ log = logging.getLogger(__name__)
 
 OVERALL, WEIGHTED, CRITICAL, ERRORS = "overall", "weighted", "critical", "errors"
 COMMENT = "comment"
+DOMAIN = "Domain"   # index name, so the frame's first header cell is labelled
 SUMMARY_COLS = (OVERALL, WEIGHTED, CRITICAL, ERRORS)
 
 
@@ -55,7 +56,7 @@ def coverage(target_id: str) -> pd.DataFrame:
             f"select count(*) n, count(distinct domain) d from {table} where target_id = ?",
             (target_id,))
         rows.append({"table": table, "rows": r["n"], "domains": r["d"]})
-    return pd.DataFrame(rows).set_index("table")
+    return pd.DataFrame(rows).set_index("table").rename_axis("Table")
 
 
 def missing_domains(target_id: str, domains: Sequence[str]) -> list[str]:
@@ -229,7 +230,7 @@ class Run:
             "details": self.details.loc[domain],
             "error": self.errors.loc[domain],
         })
-        return out.join(self.legend()[["name", "weight", "area"]])
+        return out.join(self.legend()[["name", "weight", "area"]]).rename_axis("Rule")
 
     def failures(self) -> pd.DataFrame:
         """Every (domain, rule) pair whose eval() raised, with the traceback."""
@@ -284,7 +285,7 @@ def evaluate(target_id: str, rules: Sequence[SeoRule],
 
     def frame(i: int, dtype: str) -> pd.DataFrame:
         return pd.DataFrame({lab: {d: rows[d][lab][i] for d in domains} for lab in labels},
-                            index=list(domains)).astype(dtype)
+                            index=pd.Index(list(domains), name=DOMAIN)).astype(dtype)
 
     log.info("evaluated %d rules over %d domains", len(rules), len(domains))
     return Run(frame(0, "float"), frame(1, "bool"), frame(2, "object"),
@@ -301,8 +302,11 @@ def style(table: pd.DataFrame, low: float = 0.4, high: float = 0.7, scroll: bool
     box, which looks right but does not respond to trackpad wheel events in every
     frontend; show() is the fast, natively scrollable default.
     """
-    scores = [c for c in table.columns if c not in (CRITICAL, ERRORS)]
-    flags = [c for c in (CRITICAL, ERRORS) if c in table.columns]
+    # Pick score columns by dtype, not by name: the comment column is text and
+    # must not reach colour(), and counts are flags rather than scores.
+    numeric = list(table.select_dtypes("number").columns)
+    scores = [c for c in numeric if c not in (CRITICAL, ERRORS)]
+    flags = [c for c in (CRITICAL, ERRORS) if c in numeric]
 
     def colour(v):
         if pd.isna(v):
