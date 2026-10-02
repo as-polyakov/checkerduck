@@ -30,7 +30,7 @@ class DataExtractor:
         self.ahrefs_client = TypedAhrefsClient(api_token=os.environ["AHREFS_API_TOKEN"])
         self.cloud_flare_client = TypedCloudFlareClient(api_token=os.environ["CF_TOKEN"],
                                                         account_id=os.environ["CF_ACCOUNT_ID"])
-        self.similar_web_client = SimilarWebClient(api_token=os.environ.get("SIMILAR_WEB_KEY"))
+        self.similar_web_client = SimilarWebClient(api_token=os.environ["SIMILAR_WEB_KEY"])
         self.parallelization_level = parallelization_level
         self.store = Store(get_thread_connection)
 

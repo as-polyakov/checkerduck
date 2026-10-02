@@ -7,3 +7,4 @@ __pycache__/
 *.pyc
 .idea/
 checkerduck.egg-info/
+rule_comments.json

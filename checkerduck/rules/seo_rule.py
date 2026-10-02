@@ -202,7 +202,7 @@ class DomainsInOutLinksRatioRule(SeoRule):
         ratio = float(in_num if in_num else 0) / float(out_num)
         critical_violation = ratio > self.max_ratio
 
-        return RuleEvaluation(eval_context.domain, self.__class__.__name__, max(ratio, 1), critical_violation, "")
+        return RuleEvaluation(eval_context.domain, self.__class__.__name__, min(ratio, 1), critical_violation, "")
 
 
 class SingleTopPageTrafficRule(SeoRule):
@@ -298,7 +298,7 @@ class ForbiddenWordsAnchorRule(SeoRule):
 class ForbiddenWordsOrganicKeywordsRule(SeoRule):
     """Checks for forbidden words in organic keywords"""
 
-    def __init__(self, weight: float = 1.0, forbidden_words: list = None):
+    def __init__(self, weight: float = 1.0):
         super().__init__(
             name="Forbidden Words in Organic Keywords",
             weight=weight,
@@ -326,7 +326,7 @@ class ForbiddenWordsOrganicKeywordsRule(SeoRule):
 class SpamWordsOrganicKeywordsRule(SeoRule):
     """Checks for forbidden words in organic keywords"""
 
-    def __init__(self, weight: float = 1.0, forbidden_words: list = None):
+    def __init__(self, weight: float = 1.0):
         super().__init__(
             name="Spam Words in Organic Keywords",
             weight=weight,
