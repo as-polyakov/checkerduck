@@ -44,6 +44,24 @@ EXTRACT_TABLES = ("batch_analysis", "ahrefs_org_traffic_country", "domain_catego
                   "anchors_forbidden_words", "ahrefs_organic_keywords")
 
 
+def project_root(marker: str = "pyproject.toml") -> pathlib.Path:
+    """The repo root, so notebook paths need not be absolute.
+
+    Anchored on this file first, because a notebook's cwd depends on the
+    frontend -- the repo root in some, notebooks/ in others -- and anything
+    resolved against the cwd silently points at different files. Falls back to
+    walking up from the cwd when the package is installed outside the repo.
+    """
+    here = pathlib.Path(__file__).resolve().parents[2]   # checkerduck/rules/debug.py
+    if (here / marker).exists():
+        return here
+    for candidate in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]:
+        if (candidate / marker).exists():
+            return candidate
+    raise FileNotFoundError(
+        f"no {marker} found at {here}, in {pathlib.Path.cwd()}, or any parent")
+
+
 def coverage(target_id: str) -> pd.DataFrame:
     """What the extractor actually left behind for this target, per table.
 
@@ -90,7 +108,7 @@ class Comments:
     immediately, so an interrupted editing session keeps what you already typed.
     """
 
-    def __init__(self, path: str = "rule_comments.json"):
+    def __init__(self, path: str | pathlib.Path = "rule_comments.json"):
         self.path = pathlib.Path(path)
         self._notes: dict[str, str] = (
             json.loads(self.path.read_text()) if self.path.exists() else {})
@@ -156,11 +174,11 @@ class Comments:
                 self[domain] = text
         print(f"{len(self)} notes saved to {self.path}")
 
-    def to_csv(self, path: str) -> None:
+    def to_csv(self, path: str | pathlib.Path) -> None:
         """Dump for bulk editing in a spreadsheet, then read_csv it back."""
         self.series().rename_axis("domain").to_frame().to_csv(path)
 
-    def read_csv(self, path: str) -> None:
+    def read_csv(self, path: str | pathlib.Path) -> None:
         df = pd.read_csv(path).fillna("")
         self.update(dict(zip(df["domain"], df[COMMENT])))
 
@@ -350,7 +368,7 @@ def style(table: pd.DataFrame, low: float = 0.4, high: float = 0.7, scroll: bool
                 f'{styled.to_html()}</div>')
 
 
-def show(table: pd.DataFrame, decimals: int = 2) -> pd.DataFrame:
+def show(table: pd.DataFrame, decimals: int = 2, flatten: bool = True) -> pd.DataFrame:
     """Return the frame itself, so the notebook frontend renders it natively.
 
     A plain DataFrame is what Jupyter and Deepnote scroll with a trackpad and, in
@@ -358,10 +376,16 @@ def show(table: pd.DataFrame, decimals: int = 2) -> pd.DataFrame:
     class per cell (~190 KB of HTML for 200x15) and renders inside a nested div
     that swallows wheel events -- correct colours, sluggish table.
 
+    flatten moves the index into an ordinary column. An index renders as <th>
+    header cells, which PyCharm (and several other grids) leave out when you copy
+    a selection -- you get every column except the domain. As a <td> column it
+    copies with everything else. Pass flatten=False to keep it as the index.
+
     Rules that raised show as NaN rather than a string, so the column stays
     numeric and sorts properly.
     """
-    return table.round(decimals)
+    out = table.round(decimals)
+    return out.reset_index() if flatten and out.index.name else out
 
 
 def review(comments: Comments, domains: Sequence[str], note_width: str = "520px"):
