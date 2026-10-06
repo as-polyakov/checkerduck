@@ -94,16 +94,16 @@ class OrganicTrafficRule(SeoRule):
             deal_breaker=False
         )
         self.min_traffic = 10000
-        self.top_to_total_ratio = 0.4
+        self.max_traffic = 100000
 
     def eval(self, eval_context: EvalContext) -> RuleEvaluation:
         traffic_by_country = get_domain_traffic_by_country(eval_context.target_id, eval_context.domain)
-        if not all(v > self.min_traffic for v in traffic_by_country.values()) or len(traffic_by_country) == 0:
-            return RuleEvaluation(eval_context.domain, self.__class__.__name__, 0, True, "")
         total = sum(traffic_by_country.values())
-        top = max(traffic_by_country.values())
-        diff = (self.top_to_total_ratio - top / total) / self.top_to_total_ratio
-        return RuleEvaluation(eval_context.domain, self.__class__.__name__, 1 if diff < 0 else 1 - diff, False, "")
+
+        if len(traffic_by_country) == 0 or total < self.min_traffic:
+            return RuleEvaluation(eval_context.domain, self.__class__.__name__, 0, True, "")
+        score = min(total / self.max_traffic, 1.0)
+        return RuleEvaluation(eval_context.domain, self.__class__.__name__, score, False, "")
 
 
 class HistoricalOrganicTrafficRule(SeoRule):
@@ -151,7 +151,7 @@ class HistoricalOrganicTrafficRule(SeoRule):
         slope, intercept, r_value, p_value, std_err = linregress(x, traffic)
         steady_decline = (slope < 0) and (r_value ** 2 > self.decline_r2)
         score = 1 if not steady_decline else 0.5 if not has_spikes else 0
-        return RuleEvaluation(eval_context.domain, self.__class__.__name__, score, steady_decline, "")
+        return RuleEvaluation(eval_context.domain, self.__class__.__name__, score, False, "")
 
 
 class GeographyRule(SeoRule):
@@ -164,22 +164,19 @@ class GeographyRule(SeoRule):
             area="relevance",
             deal_breaker=False
         )
-        self.tiers_by_country = {
-            # Tier 1
-            "us": 1, "gb": 1, "nz": 1, "ca": 1, "au": 1, "it": 1, "fr": 1, "es": 1, "de": 1, "jp": 1,
-            # Tier 2
-            "pt": 2,
-            # Tier 3
-            "cl": 3, "co": 3, "qa": 3, "pa": 3, "py": 3, "pe": 3, "sa": 3, "kw": 3, "id": 3,
-        }
+
 
     def eval(self, eval_context: EvalContext) -> RuleEvaluation:
-        top_countries = dao.get_domain_top_traffic_geographies(
-            eval_context.target_id, eval_context.domain, RuleConfiguration.geography.top_n_countries)
-        matches = any(country in self.tiers_by_country for country in top_countries)
+        def get_domain_top_traffic_geographies(target_id: str, domain: str, top_n: int) -> List[str]:
+            traffic_by_country = get_domain_traffic_by_country(target_id, domain)
+            ranked = sorted(traffic_by_country, key=traffic_by_country.get, reverse=True)
+            return ranked[:top_n]
+
+        top_countries = dao.get_domain_top_traffic_geographies(eval_context.target_id, eval_context.domain, RuleConfiguration.geography.top_n_countries)
+        matches = RuleConfiguration.geography.target_country in top_countries
         score = 1 if matches else 0
         critical_violation = not matches
-        return RuleEvaluation(eval_context.domain, self.__class__.__name__, score, critical_violation, "")
+        return RuleEvaluation(eval_context.domain, self.__class__.__name__, score, critical_violation, "Country during rule evalution {country}")
 
 
 class DomainsInOutLinksRatioRule(SeoRule):
@@ -226,29 +223,33 @@ class SingleTopPageTrafficRule(SeoRule):
         total_traffic = sum(v[1] for v in top_pages.values())
         concentration = float(top_traffic) / float(total_traffic)
         # Lower concentration is better (more distributed traffic)
-        score = 0 if concentration > self.max_concentration \
-            else (self.max_concentration - concentration) / self.max_concentration
+        score = 1.0 - concentration
         return RuleEvaluation(eval_context.domain, self.__class__.__name__, score, False, "")
 
 
-class ForbiddenWordsBacklinksRule(SeoRule):
-    """Checks for forbidden words in backlink anchor texts"""
+# we don't check for forbidden/spam words in Backlinks anymore
+# instead we grab last 50 (use firstSeenLink:desc) and check isSpam for them
 
-    def __init__(self):
-        super().__init__(
-            name="Forbidden Words in Backlinks",
-            weight=1,
-            area="safety",
-            deal_breaker=True
-        )
-        self.percent_mult = 3
+# class ForbiddenWordsBacklinksRule(SeoRule):
+#     """Checks for forbidden words in backlink anchor texts"""
 
-    def eval(self, eval_context: EvalContext) -> RuleEvaluation:
-        res = dao.get_backlinks(eval_context.target_id, eval_context.domain)
+#     def __init__(self):
+#         super().__init__(
+#             name="Forbidden Words in Backlinks",
+#             weight=1,
+#             area="safety",
+#             deal_breaker=True
+#         )
+#         self.max_count = 50
 
-        spam_backlinks = sum(1 for d in res if d["is_spam"] == "1")
-        score = max(0.0, 1 - self.percent_mult * spam_backlinks / len(res))
-        return RuleEvaluation(eval_context.domain, self.__class__.__name__, score, False, "")
+#     def eval(self, eval_context: EvalContext) -> RuleEvaluation:
+#         res = get_anchors_forbidden_words(eval_context.target_id, eval_context.domain,
+#                                           db.LinkDirection.IN, ForbiddenWordCategory.FORBIDDEN)
+
+#         violation_count = len(res)
+#         score = max(0.0, 1 - violation_count / self.max_count)
+#         return RuleEvaluation(eval_context.domain, self.__class__.__name__, score,
+#                               True if violation_count >= self.max_count else False, "")
 
 
 class SpamWordsAnchorsRule(SeoRule):
@@ -298,7 +299,7 @@ class ForbiddenWordsAnchorRule(SeoRule):
 class ForbiddenWordsOrganicKeywordsRule(SeoRule):
     """Checks for forbidden words in organic keywords"""
 
-    def __init__(self, weight: float = 1.0):
+    def __init__(self, weight: float = 1.0, forbidden_words: list = None):
         super().__init__(
             name="Forbidden Words in Organic Keywords",
             weight=weight,
@@ -326,9 +327,9 @@ class ForbiddenWordsOrganicKeywordsRule(SeoRule):
 class SpamWordsOrganicKeywordsRule(SeoRule):
     """Checks for forbidden words in organic keywords"""
 
-    def __init__(self, weight: float = 1.0):
+    def __init__(self, weight: float = 1.0, forbidden_words: list = None):
         super().__init__(
-            name="Spam Words in Organic Keywords",
+            name="Forbidden Words in Organic Keywords",
             weight=weight,
             area="safety",
             deal_breaker=True
@@ -353,7 +354,7 @@ class SpamWordsOrganicKeywordsRule(SeoRule):
 
 class DomainCategoryRule(SeoRule):
 
-    model = SentenceTransformer("Qwen/Qwen3-Embedding-0.6B")
+    model = SentenceTransformer("all-MiniLM-L6-v2")
 
     def __init__(self, tgt_category: str, weight: float = 1.0):
         super().__init__(
@@ -381,7 +382,7 @@ class DomainCategoryRule(SeoRule):
     def eval(self, eval_context: EvalContext) -> RuleEvaluation:
         tgt_categories = ["Technology"]
         categories = [c.full_category() for c in get_domain_categories(eval_context.target_id, eval_context.domain)]
-        log.debug("%s: categories=%s", eval_context.domain, categories)
+        print(f"domain {eval_context.domain}, category {categories}")
 
         return RuleEvaluation(eval_context.domain, self.__class__.__name__,
                               self.domain_similarity(tgt_categories, categories), False, "")
