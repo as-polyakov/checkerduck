@@ -7,7 +7,7 @@ from typing import Any, Callable, Mapping, Sequence
 from checkerduck import domain
 from checkerduck.extract.ahrefs_models import *
 from checkerduck.extract.lang import get_domain_lang_by_top_traffic
-from checkerduck.model.models import ClassifiedKeyword, ClassifiedBacklink, TargetQueryableDomain
+from checkerduck.model.models import ClassifiedKeyword, ClassifiedBacklink, ClassifiedAnchor, TargetQueryableDomain
 from checkerduck.extract.client_typed import Fetched, Outcome, Failed, NoData
 from checkerduck.extract.cloud_flare_models import RadarCategory
 
@@ -140,10 +140,10 @@ class Store:
         )
 
     def persist_outgoing_anchors(
-            self, target_id: str, outcome: Outcome[LinkedAnchor]) -> None:
+            self, target_id: str, outcome: Outcome[ClassifiedAnchor]) -> None:
         sql = _insert_sql("anchors_forbidden_words",
                           ("target_id", "domain", "direction", "url_from"),
-                          LinkedAnchor, ANCHOR_SKIP)
+                          ClassifiedAnchor, ANCHOR_SKIP)
         self._persist(
             target_id, outcome, "outgoing_anchors", sql,
             lambda domain, rows: [(target_id, domain, OUT, "", *_values(r, ANCHOR_SKIP))

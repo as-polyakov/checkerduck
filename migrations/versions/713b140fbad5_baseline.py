@@ -91,13 +91,12 @@ CREATE TABLE ahrefs_metrics_history
 (
     target_id    TEXT NOT NULL,
     domain       TEXT NOT NULL,
-    country_code TEXT NOT NULL,
     date         TEXT NOT NULL,
     org_cost     INTEGER,
     org_traffic  INTEGER,
     paid_cost    INTEGER,
     paid_traffic INTEGER,
-    PRIMARY KEY (target_id, domain, country_code, date)
+    PRIMARY KEY (target_id, domain, date)
 );
 
 CREATE TABLE ahrefs_top_pages

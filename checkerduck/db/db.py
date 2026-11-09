@@ -2,8 +2,11 @@ import logging
 import os
 import sqlite3
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from enum import Enum
 from sqlite3 import Connection
+from uuid import uuid4
 
 from alembic import command
 from alembic.config import Config
@@ -45,16 +48,47 @@ def init_database(db_path: str = DB_PATH, alembic_ini_path: str = "alembic.ini")
     log.info("database ready: %s", db_path)
 
 
+def configure_connection(conn: Connection) -> Connection:
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA busy_timeout = 5000")  # wait instead of SQLITE_BUSY
+    # WAL is for a file database shared by readers and the writer.
+    # An in-memory database reports journal_mode = memory and rejects WAL.
+    if conn.execute("PRAGMA journal_mode").fetchone()[0] != "memory":
+        conn.execute("PRAGMA journal_mode = WAL")
+        conn.execute("PRAGMA synchronous = OFF")  # safe under WAL
+    return conn
+
+
+def open_sqlite(db_path: str, *, uri: bool = False) -> Connection:
+    return configure_connection(sqlite3.connect(db_path, uri=uri))
+
+
+@contextmanager
+def memory_database(alembic_ini_path: str = "alembic.ini") -> Iterator[Connection]:
+    """Yield one connection to a fresh in-memory database migrated to head.
+
+    Alembic opens its own connection, so the database is a named shared-cache
+    memory database rather than ``:memory:`` (which is private to one
+    connection). The yielded connection keeps that database alive. Reuse it
+    for every read and write, including ``Store(lambda: conn)``.
+    """
+    uri = f"file:checkerduck_{uuid4().hex}?mode=memory&cache=shared"
+    anchor = sqlite3.connect(uri, uri=True)
+    try:
+        alembic_cfg = Config(alembic_ini_path)
+        alembic_cfg.set_main_option("sqlalchemy.url", f"sqlite:///{uri}&uri=true")
+        command.upgrade(alembic_cfg, "head")
+        yield configure_connection(anchor)
+    finally:
+        anchor.close()
+
+
 def get_thread_connection() -> Connection:
     if not _db_initialized:
         raise RuntimeError("Database not initialized.")
     conn = getattr(_thread_local, "conn", None)
     if conn is None:
-        conn = sqlite3.connect(_db_path)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON")
-        conn.execute("PRAGMA journal_mode = WAL")  # readers concurrent with writer
-        conn.execute("PRAGMA busy_timeout = 5000")  # wait instead of SQLITE_BUSY
-        conn.execute("PRAGMA synchronous = OFF")  # safe under WAL
+        conn = open_sqlite(_db_path)
         _thread_local.conn = conn
     return conn
