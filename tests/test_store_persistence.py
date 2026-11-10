@@ -37,6 +37,7 @@ from checkerduck.model.models import (
 
 ALEMBIC_INI = str(Path(__file__).resolve().parents[1] / "alembic.ini")
 TARGET = "analysis-1"
+FETCHED_AT = "2026-03-01T00:00:00+00:00"
 
 APPLICATION_TABLES = frozenset({
     "domain_categories",
@@ -96,9 +97,19 @@ def test_memory_database_is_migrated_schema(conn):
 
     columns = list(conn.execute("PRAGMA table_info(ahrefs_metrics_history)"))
     assert [row["name"] for row in columns] == [
-        "target_id", "domain", "date", "org_cost", "org_traffic", "paid_cost", "paid_traffic",
+        "fetched_at", "domain", "date", "org_cost", "org_traffic", "paid_cost", "paid_traffic",
     ]
-    assert [row["name"] for row in columns if row["pk"]] == ["target_id", "domain", "date"]
+    assert "target_id" not in [row["name"] for row in columns]
+    # pk filter follows definition order (fetched_at, domain, date), not key order.
+    assert sorted((row["pk"], row["name"]) for row in columns if row["pk"]) == [
+        (1, "domain"), (2, "fetched_at"), (3, "date"),
+    ]
+
+    error_columns = list(conn.execute("PRAGMA table_info(query_errors)"))
+    assert [row["name"] for row in error_columns] == ["fetched_at", "domain", "api", "error"]
+    assert sorted((row["pk"], row["name"]) for row in error_columns if row["pk"]) == [
+        (1, "fetched_at"), (2, "domain"), (3, "api"),
+    ]
 
 
 def test_extractor_rows_round_trip(conn, store):
@@ -307,41 +318,41 @@ def test_extractor_rows_round_trip(conn, store):
     conn.commit()
 
     # Same order as DataExtractor.run_extract / process_single_domain.
-    store.persist_domain_categories_cloudflare(TARGET, {
+    store.persist_domain_categories_cloudflare(FETCHED_AT, {
         alpha: Fetched(domain=alpha.domain, rows=alpha_categories),
         beta: Fetched(domain=beta.domain, rows=beta_categories, truncated=True),
     })
-    store.persist_batch_analysis(TARGET, analysed, {alpha.domain: "de"})
-    store.persist_domain_categories(TARGET, {alpha.domain: "Gambling", beta.domain: "News"})
-    store.persist_metrics_history(TARGET, Fetched(domain=alpha.domain, rows=alpha_history))
-    store.persist_metrics_history(TARGET, Fetched(domain=beta.domain, rows=beta_history))
+    store.persist_batch_analysis(FETCHED_AT, analysed, {alpha.domain: "de"})
+    store.persist_domain_categories({alpha.domain: "Gambling", beta.domain: "News"})
+    store.persist_metrics_history(FETCHED_AT, Fetched(domain=alpha.domain, rows=alpha_history))
+    store.persist_metrics_history(FETCHED_AT, Fetched(domain=beta.domain, rows=beta_history))
     store.persist_top_pages(
-        TARGET, Fetched(domain=alpha.domain, rows=alpha_pages), "2026-03-01", country_code="us",
+        FETCHED_AT, Fetched(domain=alpha.domain, rows=alpha_pages), "2026-03-01", country_code="us",
     )
-    store.persist_top_pages(TARGET, Fetched(domain=beta.domain, rows=beta_pages), "2026-03-02")
+    store.persist_top_pages(FETCHED_AT, Fetched(domain=beta.domain, rows=beta_pages), "2026-03-02")
     store.persist_backlinks(
-        TARGET, Fetched(domain=alpha.domain, rows=alpha_backlinks, truncated=True),
+        FETCHED_AT, Fetched(domain=alpha.domain, rows=alpha_backlinks, truncated=True),
     )
-    store.persist_backlinks(TARGET, Fetched(domain=beta.domain, rows=beta_backlinks))
-    store.persist_outgoing_anchors(TARGET, Fetched(domain=alpha.domain, rows=alpha_anchors))
-    store.persist_outgoing_anchors(TARGET, Fetched(domain=beta.domain, rows=beta_anchors))
+    store.persist_backlinks(FETCHED_AT, Fetched(domain=beta.domain, rows=beta_backlinks))
+    store.persist_outgoing_anchors(FETCHED_AT, Fetched(domain=alpha.domain, rows=alpha_anchors))
+    store.persist_outgoing_anchors(FETCHED_AT, Fetched(domain=beta.domain, rows=beta_anchors))
     store.persist_organic_keywords(
-        TARGET, Fetched(domain=alpha.domain, rows=alpha_keywords), "2026-03-01",
+        FETCHED_AT, Fetched(domain=alpha.domain, rows=alpha_keywords), "2026-03-01",
     )
     store.persist_organic_keywords(
-        TARGET, Fetched(domain=beta.domain, rows=beta_keywords), "2026-03-02",
+        FETCHED_AT, Fetched(domain=beta.domain, rows=beta_keywords), "2026-03-02",
     )
     store.set_processed(TARGET, 2)
 
-    assert _count(conn, "domain_categories", target_id=TARGET) == 3
-    assert _count(conn, "batch_analysis", target_id=TARGET) == 2
-    assert _count(conn, "ahrefs_org_traffic_country", target_id=TARGET) == 4
-    assert _count(conn, "ahrefs_metrics_history", target_id=TARGET) == 3
-    assert _count(conn, "ahrefs_top_pages", target_id=TARGET) == 4
-    assert _count(conn, "ahrefs_backlinks", target_id=TARGET) == 3
-    assert _count(conn, "anchors_forbidden_words", target_id=TARGET) == 3
-    assert _count(conn, "ahrefs_organic_keywords", target_id=TARGET) == 3
-    assert _count(conn, "query_errors", target_id=TARGET) == 0
+    assert _count(conn, "domain_categories", fetched_at=FETCHED_AT) == 3
+    assert _count(conn, "batch_analysis", fetched_at=FETCHED_AT) == 2
+    assert _count(conn, "ahrefs_org_traffic_country", fetched_at=FETCHED_AT) == 4
+    assert _count(conn, "ahrefs_metrics_history", fetched_at=FETCHED_AT) == 3
+    assert _count(conn, "ahrefs_top_pages", fetched_at=FETCHED_AT) == 4
+    assert _count(conn, "ahrefs_backlinks", fetched_at=FETCHED_AT) == 3
+    assert _count(conn, "anchors_forbidden_words", fetched_at=FETCHED_AT) == 3
+    assert _count(conn, "ahrefs_organic_keywords", fetched_at=FETCHED_AT) == 3
+    assert _count(conn, "query_errors", fetched_at=FETCHED_AT) == 0
 
     for category, domain in (
         *[(row, alpha.domain) for row in alpha_categories],
@@ -349,8 +360,8 @@ def test_extractor_rows_round_trip(conn, store):
     ):
         _assert_round_trip(
             conn, "domain_categories", category,
-            {"target_id": TARGET, "domain": domain, "id": category.id},
-            extra={"target_id": TARGET, "domain": domain},
+            {"fetched_at": FETCHED_AT, "domain": domain, "id": category.id},
+            extra={"fetched_at": FETCHED_AT, "domain": domain},
         )
 
     for item, detected_lang, lang_by_traffic, category in (
@@ -359,9 +370,9 @@ def test_extractor_rows_round_trip(conn, store):
     ):
         _assert_round_trip(
             conn, "batch_analysis", item.metrics,
-            {"target_id": TARGET, "domain": item.domain},
+            {"fetched_at": FETCHED_AT, "domain": item.domain},
             extra={
-                "target_id": TARGET,
+                "fetched_at": FETCHED_AT,
                 "domain": item.domain,
                 "detected_lang": detected_lang,
                 "lang_by_top_traffic": lang_by_traffic,
@@ -374,7 +385,7 @@ def test_extractor_rows_round_trip(conn, store):
             (row["country_code"], row["traffic"])
             for row in _select(
                 conn, "ahrefs_org_traffic_country",
-                target_id=TARGET, domain=item.domain,
+                fetched_at=FETCHED_AT, domain=item.domain,
             )
         )
         assert got_countries == sorted(item.metrics.org_traffic_top_by_country)
@@ -385,24 +396,24 @@ def test_extractor_rows_round_trip(conn, store):
     ):
         _assert_round_trip(
             conn, "ahrefs_metrics_history", point,
-            {"target_id": TARGET, "domain": domain, "date": point.date.isoformat()},
-            extra={"target_id": TARGET, "domain": domain},
+            {"fetched_at": FETCHED_AT, "domain": domain, "date": point.date.isoformat()},
+            extra={"fetched_at": FETCHED_AT, "domain": domain},
         )
 
     for index, page in enumerate(alpha_pages, start=1):
         _assert_round_trip(
             conn, "ahrefs_top_pages", page,
-            {"target_id": TARGET, "domain": alpha.domain, "country_code": "us", "date": "2026-03-01", "position": index},
+            {"fetched_at": FETCHED_AT, "domain": alpha.domain, "country_code": "us", "date": "2026-03-01", "position": index},
             extra={
-                "target_id": TARGET, "domain": alpha.domain, "country_code": "us",
+                "fetched_at": FETCHED_AT, "domain": alpha.domain, "country_code": "us",
                 "date": "2026-03-01", "position": index,
             },
         )
     _assert_round_trip(
         conn, "ahrefs_top_pages", beta_pages[0],
-        {"target_id": TARGET, "domain": beta.domain, "country_code": "", "date": "2026-03-02", "position": 1},
+        {"fetched_at": FETCHED_AT, "domain": beta.domain, "country_code": "", "date": "2026-03-02", "position": 1},
         extra={
-            "target_id": TARGET, "domain": beta.domain, "country_code": "",
+            "fetched_at": FETCHED_AT, "domain": beta.domain, "country_code": "",
             "date": "2026-03-02", "position": 1,
         },
     )
@@ -413,8 +424,8 @@ def test_extractor_rows_round_trip(conn, store):
     ):
         _assert_round_trip(
             conn, "ahrefs_backlinks", link,
-            {"target_id": TARGET, "domain": domain, "url_from": link.url_from},
-            extra={"target_id": TARGET, "domain": domain},
+            {"fetched_at": FETCHED_AT, "domain": domain, "url_from": link.url_from},
+            extra={"fetched_at": FETCHED_AT, "domain": domain},
         )
 
     for anchor, domain in (
@@ -423,8 +434,8 @@ def test_extractor_rows_round_trip(conn, store):
     ):
         _assert_round_trip(
             conn, "anchors_forbidden_words", anchor,
-            {"target_id": TARGET, "domain": domain, "direction": OUT, "anchor": anchor.anchor, "url_from": ""},
-            extra={"target_id": TARGET, "domain": domain, "direction": OUT, "url_from": ""},
+            {"fetched_at": FETCHED_AT, "domain": domain, "direction": OUT, "anchor": anchor.anchor, "url_from": ""},
+            extra={"fetched_at": FETCHED_AT, "domain": domain, "direction": OUT, "url_from": ""},
             not_stored=ANCHOR_NOT_STORED,
         )
 
@@ -435,10 +446,10 @@ def test_extractor_rows_round_trip(conn, store):
         _assert_round_trip(
             conn, "ahrefs_organic_keywords", keyword,
             {
-                "target_id": TARGET, "domain": domain, "keyword": keyword.keyword,
+                "fetched_at": FETCHED_AT, "domain": domain, "keyword": keyword.keyword,
                 "keyword_country": keyword.keyword_country, "date": query_date,
             },
-            extra={"target_id": TARGET, "domain": domain, "date": query_date},
+            extra={"fetched_at": FETCHED_AT, "domain": domain, "date": query_date},
         )
 
     processed = conn.execute(
@@ -452,25 +463,25 @@ def test_failed_outcome_records_error_without_dropping_rows(conn, store):
         _backlink("https://source.example/kept", anchor="kept", title="Kept"),
         None,
     )
-    store.persist_backlinks(TARGET, Fetched(domain="alpha.example", rows=[kept]))
+    store.persist_backlinks(FETCHED_AT, Fetched(domain="alpha.example", rows=[kept]))
 
     error = "x" * 2500
     store.persist_backlinks(
-        TARGET, Failed(domain="beta.example", error=error, status=500),
+        FETCHED_AT, Failed(domain="beta.example", error=error, status=500),
     )
-    store.persist_metrics_history(TARGET, NoData(domain="alpha.example"))
+    store.persist_metrics_history(FETCHED_AT, NoData(domain="alpha.example"))
 
-    errors = _select(conn, "query_errors", target_id=TARGET)
+    errors = _select(conn, "query_errors", fetched_at=FETCHED_AT)
     assert len(errors) == 1
     assert errors[0]["domain"] == "beta.example"
     assert errors[0]["api"] == "backlinks"
     assert errors[0]["error"] == error[:2000]
-    assert _count(conn, "ahrefs_backlinks", target_id=TARGET) == 1
-    assert _count(conn, "ahrefs_metrics_history", target_id=TARGET) == 0
+    assert _count(conn, "ahrefs_backlinks", fetched_at=FETCHED_AT) == 1
+    assert _count(conn, "ahrefs_metrics_history", fetched_at=FETCHED_AT) == 0
     _assert_round_trip(
         conn, "ahrefs_backlinks", kept,
-        {"target_id": TARGET, "domain": "alpha.example", "url_from": kept.url_from},
-        extra={"target_id": TARGET, "domain": "alpha.example"},
+        {"fetched_at": FETCHED_AT, "domain": "alpha.example", "url_from": kept.url_from},
+        extra={"fetched_at": FETCHED_AT, "domain": "alpha.example"},
     )
 
 

@@ -16,7 +16,7 @@ def evaluate_domain(target_id: str, domain: str) -> List[RuleEvaluation]:
                  GeographyRule(),
                  DomainsInOutLinksRatioRule(),
                  SingleTopPageTrafficRule(),
-                 ForbiddenWordsBacklinksRule(),
+                 # ForbiddenWordsBacklinksRule(),
                  SpamWordsAnchorsRule(),
                  ForbiddenWordsAnchorRule(),
                  ForbiddenWordsOrganicKeywordsRule(),

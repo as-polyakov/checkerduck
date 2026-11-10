@@ -29,7 +29,7 @@ class Analysis:
     target_id: str  # Primary key - unique analysis identifier
     name: str  # Name of the analysis session
     status: AnalysisStatus  # Current status (pending, running, completed, failed)
-    created_at: datetime  # Timestamp when analysis was created
+    created_at: str  # fetched_at_now() snapshot shared by this extraction
     completed_at: Optional[datetime]  # Timestamp when analysis completed (None if not completed)
     domains: List[AnalysisDomain]
     processed_domains: int

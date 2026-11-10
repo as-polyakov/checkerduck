@@ -4,7 +4,7 @@ from typing import Sequence, Mapping
 
 
 from checkerduck.db.db import get_thread_connection, init_database
-from checkerduck.db.store import Store
+from checkerduck.db.store import Store, fetched_at_now
 from checkerduck.extract.client_typed import TypedHTTPJSONClient, new_endpoint, Outcome, Fetched
 from checkerduck.extract.cloud_flare_models import RadarDomainResponse, RadarCategory
 from checkerduck.model.models import TargetQueryableDomain
@@ -47,4 +47,4 @@ if __name__ == "__main__":
     match res[domain]:
         case Fetched(val) as f:
             log.info("%s", f.rows)
-    store.persist_domain_categories_cloudflare("---", res)
+    store.persist_domain_categories_cloudflare(fetched_at_now(), res)

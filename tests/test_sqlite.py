@@ -5,14 +5,14 @@ This script demonstrates basic functionality without needing real API calls.
 """
 
 import json
-from checkerduck.extract.extract import AhrefsClient, AhrefsDatabaseError
+from checkerduck.extract.ahrefs_client_typed import AhrefsClient
 
 def test_database_operations():
     """Test database initialization and basic operations."""
     print("🧪 Testing SQLite integration...")
     
     # Initialize client (no API token needed for database testing)
-    client = AhrefsClient(api_token="test_token", db_path="../ahrefs_data.db")
+    client = AhrefsClient(api_token="test_token")
     
     try:
         # Test database initialization
@@ -88,7 +88,7 @@ def test_database_operations():
         
         # Show sample data
         cursor.execute("""
-            SELECT url, ahrefs_rank, domain_rating, org_traffic 
+            SELECT domain, ahrefs_rank, domain_rating, org_traffic 
             FROM batch_analysis 
             ORDER BY ahrefs_rank 
             LIMIT 3
@@ -99,7 +99,7 @@ def test_database_operations():
         
         # Show country data
         cursor.execute("""
-            SELECT ba.url, tc.country_code, tc.traffic, tc.cost 
+            SELECT ba.domain, tc.country_code, tc.traffic
             FROM batch_analysis ba 
             JOIN ahrefs_org_traffic_country tc ON ba.target_id = tc.target_id
             ORDER BY tc.traffic DESC
@@ -112,8 +112,6 @@ def test_database_operations():
         conn.close()
         print("\n🎉 All tests passed! SQLite integration is working correctly.")
         
-    except AhrefsDatabaseError as e:
-        print(f"❌ Database error: {e}")
     except Exception as e:
         print(f"❌ Unexpected error: {e}")
     

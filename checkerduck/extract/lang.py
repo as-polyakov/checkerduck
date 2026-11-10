@@ -1,5 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Sequence
+from typing import List, Sequence, Mapping
 
 from bs4 import BeautifulSoup
 import logging
@@ -61,7 +61,7 @@ def get_domain_lang(domain: str, lang_by_traffic: str) -> str:
     return lang
 
 
-def build_lang_by_typed_domain(analyzed_domains: Sequence[AnalysedDomain]):
+def build_lang_by_typed_domain(analyzed_domains: Sequence[AnalysedDomain]) -> Mapping[str, str]:
     lang_by_domain = {}
     with ThreadPoolExecutor(max_workers=50) as executor:
         future_to_domain = {tgt.domain:

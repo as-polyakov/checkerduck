@@ -10,7 +10,7 @@ import sys
 
 sys.path.append('../extract')
 
-from checkerduck.extract.extract import AhrefsClient, AhrefsDatabaseError
+from checkerduck.extract.ahrefs_client_typed import AhrefsClient
 
 
 def test_pure_sql_operations():
@@ -18,7 +18,7 @@ def test_pure_sql_operations():
     print("🧪 Testing pure SQL integration with Alembic...")
 
     # Initialize client (no API token needed for database testing)
-    client = AhrefsClient(api_token="test_token", db_path="../ahrefs_data.db")
+    client = AhrefsClient(api_token="test_token")
 
     try:
         # Test database initialization with Alembic
@@ -105,7 +105,7 @@ def test_pure_sql_operations():
 
         # Show sample data with JSON-style output
         cursor.execute("""
-            SELECT url, ahrefs_rank, domain_rating, org_traffic 
+            SELECT domain, ahrefs_rank, domain_rating, org_traffic 
             FROM batch_analysis 
             ORDER BY ahrefs_rank 
             LIMIT 3
@@ -122,7 +122,7 @@ def test_pure_sql_operations():
 
         # Show country data as JSON
         cursor.execute("""
-            SELECT ba.url, tc.country_code, tc.traffic, tc.cost 
+            SELECT ba.domain, tc.country_code, tc.traffic
             FROM batch_analysis ba 
             JOIN ahrefs_org_traffic_country tc ON ba.target_id = tc.target_id
             ORDER BY tc.traffic DESC
@@ -143,8 +143,6 @@ def test_pure_sql_operations():
         conn.close()
         print("\n🎉 All tests passed! Pure SQL integration with Alembic is working correctly.")
 
-    except AhrefsDatabaseError as e:
-        print(f"❌ Database error: {e}")
     except Exception as e:
         print(f"❌ Unexpected error: {e}")
 

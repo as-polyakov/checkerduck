@@ -110,9 +110,6 @@ class TypedHTTPJSONClient:
         except msgspec.DecodeError as e:
             return for_each_domain(lambda d: Failed(domain=d, error=f"malformed body: {e}"))
 
-        if not rows:
-            return for_each_domain(lambda d: NoData(domain=d))
-
         def to_outcome(domain: str, all_rows: Mapping[str, list[R]]) -> Outcome[R]:
             if not all_rows[domain]:
                 return NoData(domain=domain)

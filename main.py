@@ -1,36 +1,48 @@
 import logging
 
-from torch._inductor import analysis
+import pandas as pd
 
 from checkerduck import log as logsetup
 from checkerduck.db.db import init_database
+from checkerduck.db.store import fetched_at_now
 from checkerduck.extract.extractor import DataExtractor
-from checkerduck.db import dao
-from checkerduck.model.models import TargetQueryableDomain, Analysis, AnalysisDomain
+from checkerduck.model.models import Analysis, AnalysisDomain
 from checkerduck.rules.rule_aggregator import evaluate_domain
-from checkerduck.rules.seo_rule import DomainCategoryRule, EvalContext
-import pandas as pd
 
 log = logging.getLogger("checkerduck.main")
 
 
 def main():
-    candidate_domains = pd.read_csv('/Users/antonpolyakov/Downloads/candidate_domains.csv')
 
     logsetup.setup()
-    init_database(db_path="/Users/antonpolyakov/Downloads/checkerduck.db")
+    init_database(db_path="checkerduck.db")
     candidate_domains = pd.read_csv('candidate_domains.csv')
 
     analysis = Analysis(
         target_id="x",
         name=None,
         status=None,
-        created_at=None,
+        created_at=fetched_at_now(),
         completed_at=None,
         processed_domains=None,
         domains=[
-            AnalysisDomain(domain=d, price_usd=0, notes=None) for d in candidate_domains['url'][:200]],
+            # AnalysisDomain(domain=d, price_usd=0, notes=None) for d in candidate_domains['url'][:200]],
+            AnalysisDomain(domain=d, price_usd=0, notes=None) for d in [
+               'appsgeyser.io',
+               'on-magazine.co.uk',
+               'bestutahrealestate.com',
+               'englishvers.com',
+               'itsupplychain.com',
+               'designyourway.net',
+               'pc-bottleneck.com',
+               'dearblessings.com',
+               'newsgram.com',
+               'finchannel.com'
+            ]],
     )
+    log.info("Analysis created with date %s", analysis.created_at)
+    extractor = DataExtractor(analysis)
+    extractor.run_extract()
     eval_results = [evaluate_domain(analysis.target_id, domain.domain)
                     for domain in analysis.domains]
     print(eval_results)
@@ -45,8 +57,6 @@ def main():
     #     domains=[
     #         AnalysisDomain(domain=d, price_usd=0, notes=None) for d in candidate_domains['url'][:200]],
     # )
-    # extractor = DataExtractor()
-    # extractor.run_extract(analysis)
 
     # categories = extractor.cloud_flare_client.query_domain_categories([
     #
@@ -59,7 +69,7 @@ def main():
     # domains = [TargetQueryableDomain(domain=d.domain) for d in analysis.domains]
     # domains = [TargetQueryableDomain(domain="bitbucket.org")]
     # categories = extractor.cloud_flare_client.query_domain_categories(domains)
-    # extractor.store.persist_domain_categories_cloudflare(id, categories)
+    # extractor.store.persist_domain_categories_cloudflare(fetched_at_now(), categories)
 
     # rule = DomainCategoryRule("Technology")
     # rule.test()

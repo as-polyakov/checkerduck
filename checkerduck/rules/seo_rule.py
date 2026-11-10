@@ -1,14 +1,14 @@
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, List
 
 import numpy as np
 from scipy import signal
 from scipy.stats import linregress
 
-from checkerduck.db import dao
-from checkerduck.db.dao import get_domain_dr, get_domain_traffic_by_country, get_domain_traffic_by_date, \
+from checkerduck.db import store
+from checkerduck.db.store import get_domain_dr, get_domain_traffic_by_country, get_domain_traffic_by_date, \
     get_in_out_num_domains, \
     get_top_pages_traffic, get_anchors_forbidden_words, get_organic_keywords_forbidden_words, get_domain_categories
 from checkerduck.db import db
@@ -29,6 +29,7 @@ class EvalContext:
 class GeographyRuleConfig:
     """Knobs for GeographyRule. Edit in a notebook via RuleConfiguration.geography."""
     top_n_countries: Literal[1, 3] = 1
+    target_country = "us"
 
 
 class RuleConfiguration:
@@ -43,12 +44,10 @@ class SeoRule(ABC):
             self,
             name: str,
             weight: float,
-            area: Literal["safety", "authority", "relevance", "traffic"],
             deal_breaker: bool = False
     ):
         self.name = name
         self.weight = weight
-        self.area = area
         self.deal_breaker = deal_breaker
 
     @abstractmethod
@@ -76,7 +75,7 @@ class DomainRatingRule(SeoRule):
         self.min_threshold = 30
 
     def eval(self, eval_context: EvalContext) -> RuleEvaluation:
-        dr = get_domain_dr(eval_context.target_id, eval_context.domain)
+        dr = get_domain_dr(eval_context.domain)
         score = min(dr / 100.0, 1.0)
         critical_violation = dr < self.min_threshold
         return RuleEvaluation(eval_context.domain, self.__class__.__name__,
@@ -97,7 +96,7 @@ class OrganicTrafficRule(SeoRule):
         self.max_traffic = 100000
 
     def eval(self, eval_context: EvalContext) -> RuleEvaluation:
-        traffic_by_country = get_domain_traffic_by_country(eval_context.target_id, eval_context.domain)
+        traffic_by_country = get_domain_traffic_by_country(eval_context.domain)
         total = sum(traffic_by_country.values())
 
         if len(traffic_by_country) == 0 or total < self.min_traffic:
@@ -138,7 +137,7 @@ class HistoricalOrganicTrafficRule(SeoRule):
         return peaks.size > 0
 
     def eval(self, eval_context: EvalContext) -> RuleEvaluation:
-        traffic_by_date = get_domain_traffic_by_date(eval_context.target_id, eval_context.domain)
+        traffic_by_date = get_domain_traffic_by_date(eval_context.domain)
         # Sort by date to get time order
         dates = sorted(traffic_by_date.keys())
         traffic = np.array([traffic_by_date[d] for d in dates], dtype=float)
@@ -168,11 +167,11 @@ class GeographyRule(SeoRule):
 
     def eval(self, eval_context: EvalContext) -> RuleEvaluation:
         def get_domain_top_traffic_geographies(target_id: str, domain: str, top_n: int) -> List[str]:
-            traffic_by_country = get_domain_traffic_by_country(target_id, domain)
+            traffic_by_country = get_domain_traffic_by_country(domain)
             ranked = sorted(traffic_by_country, key=traffic_by_country.get, reverse=True)
             return ranked[:top_n]
 
-        top_countries = dao.get_domain_top_traffic_geographies(eval_context.target_id, eval_context.domain, RuleConfiguration.geography.top_n_countries)
+        top_countries = store.get_domain_top_traffic_geographies(eval_context.domain, RuleConfiguration.geography.top_n_countries)
         matches = RuleConfiguration.geography.target_country in top_countries
         score = 1 if matches else 0
         critical_violation = not matches
@@ -192,7 +191,7 @@ class DomainsInOutLinksRatioRule(SeoRule):
         self.max_ratio = 5
 
     def eval(self, eval_context: EvalContext) -> RuleEvaluation:
-        in_num, out_num = get_in_out_num_domains(eval_context.target_id, eval_context.domain)
+        in_num, out_num = get_in_out_num_domains(eval_context.domain)
         if not out_num or not out_num:
             return RuleEvaluation(eval_context.domain, self.__class__.__name__, 0, False, "")
 
@@ -215,7 +214,7 @@ class SingleTopPageTrafficRule(SeoRule):
         self.max_concentration = 0.6
 
     def eval(self, eval_context: EvalContext) -> RuleEvaluation:
-        top_pages = get_top_pages_traffic(eval_context.target_id, eval_context.domain)
+        top_pages = get_top_pages_traffic(eval_context.domain)
 
         top_pos, (top_title, top_traffic) = max(
             top_pages.items(), key=lambda x: x[1][1]
@@ -243,7 +242,7 @@ class SingleTopPageTrafficRule(SeoRule):
 #         self.max_count = 50
 
 #     def eval(self, eval_context: EvalContext) -> RuleEvaluation:
-#         res = get_anchors_forbidden_words(eval_context.target_id, eval_context.domain,
+#         res = get_anchors_forbidden_words(eval_context.domain,
 #                                           db.LinkDirection.IN, ForbiddenWordCategory.FORBIDDEN)
 
 #         violation_count = len(res)
@@ -265,7 +264,7 @@ class SpamWordsAnchorsRule(SeoRule):
         self.max_count = 50
 
     def eval(self, eval_context: EvalContext) -> RuleEvaluation:
-        res = get_anchors_forbidden_words(eval_context.target_id, eval_context.domain,
+        res = get_anchors_forbidden_words(eval_context.domain,
                                           db.LinkDirection.OUT, ForbiddenWordCategory.SPAM)
 
         violation_count = len(res)
@@ -287,7 +286,7 @@ class ForbiddenWordsAnchorRule(SeoRule):
         self.max_count = 50
 
     def eval(self, eval_context: EvalContext) -> RuleEvaluation:
-        res = get_anchors_forbidden_words(eval_context.target_id, eval_context.domain,
+        res = get_anchors_forbidden_words(eval_context.domain,
                                           db.LinkDirection.OUT, ForbiddenWordCategory.FORBIDDEN)
 
         violation_count = len(res)
@@ -309,7 +308,7 @@ class ForbiddenWordsOrganicKeywordsRule(SeoRule):
 
     def eval(self, eval_context: EvalContext) -> RuleEvaluation:
         # keyword, keyword_country, is_best_position_set_top_3, is_best_position_set_top_4_10, is_best_position_set_top_11_50, best_position_url
-        forbidden_organic_keywords = get_organic_keywords_forbidden_words(eval_context.target_id, eval_context.domain,
+        forbidden_organic_keywords = get_organic_keywords_forbidden_words(eval_context.domain,
                                                                           ForbiddenWordCategory.FORBIDDEN)
 
         critical_violation = any(bool(w["is_best_position_set_top_3"]) for w in forbidden_organic_keywords)
@@ -337,7 +336,7 @@ class SpamWordsOrganicKeywordsRule(SeoRule):
 
     def eval(self, eval_context: EvalContext) -> RuleEvaluation:
         # keyword, keyword_country, is_best_position_set_top_3, is_best_position_set_top_4_10, is_best_position_set_top_11_50, best_position_url
-        forbidden_organic_keywords = get_organic_keywords_forbidden_words(eval_context.target_id, eval_context.domain,
+        forbidden_organic_keywords = get_organic_keywords_forbidden_words(eval_context.domain,
                                                                           ForbiddenWordCategory.SPAM)
 
         critical_violation = any(bool(w["is_best_position_set_top_3"]) for w in forbidden_organic_keywords)
@@ -381,7 +380,7 @@ class DomainCategoryRule(SeoRule):
 
     def eval(self, eval_context: EvalContext) -> RuleEvaluation:
         tgt_categories = ["Technology"]
-        categories = [c.full_category() for c in get_domain_categories(eval_context.target_id, eval_context.domain)]
+        categories = [c.full_category() for c in get_domain_categories(eval_context.domain)]
         print(f"domain {eval_context.domain}, category {categories}")
 
         return RuleEvaluation(eval_context.domain, self.__class__.__name__,

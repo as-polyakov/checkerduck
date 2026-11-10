@@ -14,11 +14,13 @@ import pathlib
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Sequence, Mapping
+from checkerduck.model import Analysis
 
 import pandas as pd
 
-from checkerduck.db import dao
+from checkerduck.db.db import get_thread_connection
+from checkerduck.db.store import Store, get_analysis, select_all
 from checkerduck.rules.seo_rule import EvalContext, SeoRule
 
 log = logging.getLogger(__name__)
@@ -39,19 +41,20 @@ def label(rule: SeoRule) -> str:
     return type(rule).__name__.removesuffix("Rule")
 
 
-EXTRACT_TABLES = ("batch_analysis", "ahrefs_org_traffic_country", "domain_categories",
-                  "ahrefs_metrics_history", "ahrefs_top_pages", "ahrefs_backlinks",
-                  "anchors_forbidden_words", "ahrefs_organic_keywords")
+# Country traffic has no TTL of its own; it is fresh when batch analysis is.
+_FRESH_CHECKS = (
+    ("batch_analysis", "is_batch_analysis_fresh"),
+    ("ahrefs_org_traffic_country", "is_batch_analysis_fresh"),
+    ("domain_categories", "is_domain_categories_fresh"),
+    ("ahrefs_metrics_history", "is_metrics_history_fresh"),
+    ("ahrefs_top_pages", "is_top_pages_fresh"),
+    ("ahrefs_backlinks", "is_backlinks_fresh"),
+    ("anchors_forbidden_words", "is_outgoing_anchors_fresh"),
+    ("ahrefs_organic_keywords", "is_organic_keywords_fresh"),
+)
 
 
 def project_root(marker: str = "pyproject.toml") -> pathlib.Path:
-    """The repo root, so notebook paths need not be absolute.
-
-    Anchored on this file first, because a notebook's cwd depends on the
-    frontend -- the repo root in some, notebooks/ in others -- and anything
-    resolved against the cwd silently points at different files. Falls back to
-    walking up from the cwd when the package is installed outside the repo.
-    """
     here = pathlib.Path(__file__).resolve().parents[2]   # checkerduck/rules/debug.py
     if (here / marker).exists():
         return here
@@ -62,26 +65,35 @@ def project_root(marker: str = "pyproject.toml") -> pathlib.Path:
         f"no {marker} found at {here}, in {pathlib.Path.cwd()}, or any parent")
 
 
-def coverage(target_id: str) -> pd.DataFrame:
-    """What the extractor actually left behind for this target, per table.
 
-    A rule is only as good as its input: an empty table here explains a column
-    of zeros or ERRs far better than reading the rule code does.
+def _fresh_flags(domains: Sequence[str]) -> pd.DataFrame:
+    """Domain × data table. True when that table's is_*_fresh check passes.
+
+    Country traffic has no check of its own and follows batch analysis, which
+    is why both columns call is_batch_analysis_fresh.
     """
-    rows = []
-    for table in EXTRACT_TABLES:
-        r = dao.select_one(
-            f"select count(*) n, count(distinct domain) d from {table} where target_id = ?",
-            (target_id,))
-        rows.append({"table": table, "rows": r["n"], "domains": r["d"]})
-    return pd.DataFrame(rows).set_index("table").rename_axis("Table")
+    db = Store(get_thread_connection)
+    columns = {
+        table: [bool(getattr(db, method)(domain)) for domain in domains]
+        for table, method in _FRESH_CHECKS
+    }
+    return pd.DataFrame(columns, index=pd.Index(list(domains), name=DOMAIN))
 
 
-def missing_domains(target_id: str, domains: Sequence[str]) -> list[str]:
-    """Input domains with no batch_analysis row -- never extracted for this target."""
-    have = {r["domain"] for r in dao.select_all(
-        "select distinct domain from batch_analysis where target_id = ?", (target_id,))}
-    return [d for d in domains if d not in have]
+def coverage(target_id: str) -> pd.DataFrame:
+    """How many of this analysis's domains have a fresh snapshot, per table."""
+    domains = [r["domain"] for r in select_all(
+        "select domain from analysis_domains where target_id = ?", (target_id,))]
+    counts = _fresh_flags(domains).sum().astype(int)
+    return counts.rename("domains").rename_axis("Table").to_frame()
+
+
+def data_freshness(domains: Sequence[str]) -> pd.DataFrame:
+    """Domains on rows, data tables on columns.
+    """
+    flags = _fresh_flags(domains)
+    marks = flags.map(lambda present: "✅" if present else "❌")
+    return marks.reset_index()
 
 
 _THREAD_UNSAFE = ("torch", "sentence_transformers")
@@ -269,8 +281,7 @@ class Run:
         return moved.sort_values(sort_by, kind="stable") if sort_by in moved else moved
 
 
-def evaluate(target_id: str, rules: Sequence[SeoRule],
-             domains: Sequence[str] | None = None, workers: int = 8) -> Run:
+def evaluate(analysis: Analysis, rules: Sequence[SeoRule], workers: int = 8) -> Run:
     """Run every rule against every domain. Fans out per domain, as production does.
 
     workers is forced to 1 when any rule holds a torch model; see holds_model().
@@ -279,15 +290,14 @@ def evaluate(target_id: str, rules: Sequence[SeoRule],
         log.warning("forcing workers=1: %s hold a torch model, and concurrent "
                     "inference aborts the process", heavy)
         workers = 1
-    if domains is None:
-        domains = [d.domain for d in dao.get_analysis(target_id).domains]
+    domains = [d.domain for d in analysis.domains]
     domains = list(dict.fromkeys(domains))  # dedupe, keep order: it becomes the index
     labels = [label(r) for r in rules]
     if len(set(labels)) != len(labels):
         raise ValueError(f"the same rule class appears twice: {labels}")
 
     def one(domain: str) -> dict[str, tuple]:
-        ctx = EvalContext(target_id, domain)
+        ctx = EvalContext(analysis.target_id, domain)
         row = {}
         for rule in rules:
             try:

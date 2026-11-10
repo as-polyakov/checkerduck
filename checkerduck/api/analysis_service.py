@@ -4,7 +4,6 @@ Service layer for analysis operations
 import logging
 import threading
 import uuid
-from datetime import datetime
 from typing import List
 
 from checkerduck.api.models import StartAnalysisRequest, AnalysisResponse, AnalysisStatus
@@ -13,7 +12,7 @@ from checkerduck.model import Analysis
 from checkerduck.model.models import AnalysisDomain
 from checkerduck.rules.rule_aggregator import evaluate_domain
 from checkerduck.domain.utils import safe_int
-from checkerduck.db import dao
+from checkerduck.db import store as dao
 
 
 log = logging.getLogger(__name__)
@@ -21,7 +20,7 @@ log = logging.getLogger(__name__)
 
 def create_analysis(request: StartAnalysisRequest) -> AnalysisResponse:
     analysis_id = str(uuid.uuid4())
-    res = Analysis(analysis_id, request.name, AnalysisStatus.PENDING, datetime.now(), None,
+    res = Analysis(analysis_id, request.name, AnalysisStatus.PENDING, dao.fetched_at_now(), None,
                    [AnalysisDomain(d.domain, safe_int(d.price), d.notes) for d in request.domains], 0)
     dao.persist_analysis(res)
 
@@ -52,7 +51,7 @@ def create_analysis(request: StartAnalysisRequest) -> AnalysisResponse:
 #         from analysis where target_id = ?
 def to_analysis_response(analysis: Analysis) -> AnalysisResponse:
     return AnalysisResponse(id=analysis.target_id, name=analysis.name, status=AnalysisStatus(analysis.status),
-                            created_at=analysis.created_at,
+                            created_at=dao.safe_date_from_str(analysis.created_at),
                             completed_at=analysis.completed_at,
                             total_domains=len(analysis.domains), domains_analyzed=analysis.processed_domains)
 
@@ -67,8 +66,8 @@ def list_analyses() -> List[AnalysisResponse]:
 
 def run_analysis(analysis: Analysis):
     dao.update_analysis_status(analysis.target_id, AnalysisStatus.RUNNING)
-    data_extractor = DataExtractor()
-    data_extractor.run_extract(analysis)
+    data_extractor = DataExtractor(analysis)
+    data_extractor.run_extract()
     eval_results = [evaluate_domain(analysis.target_id, domain.domain)
                     for domain in analysis.domains]
 
