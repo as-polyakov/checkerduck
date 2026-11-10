@@ -85,8 +85,14 @@ class TypedHTTPJSONClient:
         elif log.isEnabledFor(logging.DEBUG):
             # r.text is not free on a 100KB backlinks page; only build it in debug.
             log.debug("%s %s -> %s %s", method, r.url, r.status_code, r.text[:BODY_CHARS])
+        self._on_response(endpoint, r, kwargs)
         r.raise_for_status()
         return r.content
+
+    def _on_response(self, endpoint: str, response: requests.Response,
+                     request_kwargs: Mapping[str, Any]) -> None:
+        """See the completed response, including error responses, before it is raised."""
+        return None
 
     def _get_bytes(self, endpoint: str, params: dict[str, Any]) -> bytes:
         return self._request("GET", endpoint, params=params)

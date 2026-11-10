@@ -69,7 +69,6 @@ class DomainRatingRule(SeoRule):
         super().__init__(
             name="Domain Rating",
             weight=1.0,
-            area="authority",
             deal_breaker=False
         )
         self.min_threshold = 30
@@ -89,7 +88,6 @@ class OrganicTrafficRule(SeoRule):
         super().__init__(
             name="Organic Traffic",
             weight=1.0,
-            area="traffic",
             deal_breaker=False
         )
         self.min_traffic = 10000
@@ -112,7 +110,6 @@ class HistoricalOrganicTrafficRule(SeoRule):
         super().__init__(
             name="Historical Organic Traffic",
             weight=weight,
-            area="traffic",
             deal_breaker=False
         )
         self.min_avg_traffic = min_avg_traffic
@@ -160,7 +157,6 @@ class GeographyRule(SeoRule):
         super().__init__(
             name="Geography",
             weight=1,
-            area="relevance",
             deal_breaker=False
         )
 
@@ -185,7 +181,6 @@ class DomainsInOutLinksRatioRule(SeoRule):
         super().__init__(
             name="Domains In/Out Links Ratio",
             weight=0.5,
-            area="authority",
             deal_breaker=False
         )
         self.max_ratio = 5
@@ -208,7 +203,6 @@ class SingleTopPageTrafficRule(SeoRule):
         super().__init__(
             name="Single Top Page Traffic",
             weight=1,
-            area="relevance",
             deal_breaker=False
         )
         self.max_concentration = 0.6
@@ -236,7 +230,6 @@ class SingleTopPageTrafficRule(SeoRule):
 #         super().__init__(
 #             name="Forbidden Words in Backlinks",
 #             weight=1,
-#             area="safety",
 #             deal_breaker=True
 #         )
 #         self.max_count = 50
@@ -258,7 +251,6 @@ class SpamWordsAnchorsRule(SeoRule):
         super().__init__(
             name="Spam Words in Anchors",
             weight=weight,
-            area="safety",
             deal_breaker=True
         )
         self.max_count = 50
@@ -280,7 +272,6 @@ class ForbiddenWordsAnchorRule(SeoRule):
         super().__init__(
             name="Spam Words in Anchors",
             weight=weight,
-            area="safety",
             deal_breaker=True
         )
         self.max_count = 50
@@ -302,7 +293,6 @@ class ForbiddenWordsOrganicKeywordsRule(SeoRule):
         super().__init__(
             name="Forbidden Words in Organic Keywords",
             weight=weight,
-            area="safety",
             deal_breaker=True
         )
 
@@ -330,7 +320,6 @@ class SpamWordsOrganicKeywordsRule(SeoRule):
         super().__init__(
             name="Forbidden Words in Organic Keywords",
             weight=weight,
-            area="safety",
             deal_breaker=True
         )
 
@@ -359,7 +348,6 @@ class DomainCategoryRule(SeoRule):
         super().__init__(
             name="Domain categories",
             weight=weight,
-            area="safety",
             deal_breaker=True
         )
         self.tgt_category = tgt_category

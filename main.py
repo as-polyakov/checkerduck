@@ -13,7 +13,6 @@ log = logging.getLogger("checkerduck.main")
 
 
 def main():
-
     logsetup.setup()
     init_database(db_path="checkerduck.db")
     candidate_domains = pd.read_csv('candidate_domains.csv')
@@ -28,16 +27,26 @@ def main():
         domains=[
             # AnalysisDomain(domain=d, price_usd=0, notes=None) for d in candidate_domains['url'][:200]],
             AnalysisDomain(domain=d, price_usd=0, notes=None) for d in [
-               'appsgeyser.io',
-               'on-magazine.co.uk',
-               'bestutahrealestate.com',
-               'englishvers.com',
-               'itsupplychain.com',
-               'designyourway.net',
-               'pc-bottleneck.com',
-               'dearblessings.com',
-               'newsgram.com',
-               'finchannel.com'
+                # 'appsgeyser.io',
+                # 'on-magazine.co.uk',
+                # 'bestutahrealestate.com',
+                # 'englishvers.com',
+                # 'itsupplychain.com',
+                # 'designyourway.net',
+                # 'pc-bottleneck.com',
+                # 'dearblessings.com',
+                # 'newsgram.com',
+                # 'finchannel.com',
+                'wpreset.com',
+                # 'chooseitnames.com',
+                # 'wealthandfinance.digital',
+                # 'companieshistory.com',
+                # 'flixpress.com',
+                # 'bdevs.net',
+                # 'talkandroid.com',
+                # 'podscan.fm',
+                # 'azbigmedia.com',
+                # 'mynewsgh.com'
             ]],
     )
     log.info("Analysis created with date %s", analysis.created_at)
