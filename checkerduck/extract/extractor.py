@@ -74,7 +74,6 @@ class DataExtractor:
             self.enrich_targets_with_lang(domains)
             words_by_cat_by_lang = get_category_forbidden_words_by_lang(domains)
 
-            # self.process_single_domain(domains[0], words_by_cat_by_lang)
             results, failures = self.process_all_domains(target_id, domains, words_by_cat_by_lang)
             log.info("%s: extracted, ok=%d failed=%d", target_id, len(results), len(failures))
 

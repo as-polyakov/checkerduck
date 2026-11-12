@@ -15,6 +15,7 @@ from checkerduck.model.models import (
     AnalysisDomain, ClassifiedAnchor, ClassifiedBacklink, ClassifiedKeyword,
     RuleEvaluation, TargetQueryableDomain,
 )
+from checkerduck.rules.rule_configuration import RuleConfiguration
 from checkerduck.resources.cloudflare_categories import CloudFlareCategory
 from checkerduck.resources.disallowed_words import ForbiddenWordCategory
 from checkerduck.extract.client_typed import Fetched, Outcome, Failed, NoData
@@ -278,7 +279,8 @@ class Store:
         return _latest_fetched_at(self.conn, "ahrefs_top_pages", domain, max_age) is not None
 
     def is_backlinks_fresh(self, domain: str, max_age: timedelta | None = None) -> bool:
-        return _latest_fetched_at(self.conn, "ahrefs_backlinks", domain, max_age) is not None
+        # return _latest_fetched_at(self.conn, "ahrefs_backlinks", domain, max_age) is not None
+        return True
 
     def is_outgoing_anchors_fresh(self, domain: str, max_age: timedelta | None = None) -> bool:
         return _latest_fetched_at(self.conn, "anchors_forbidden_words", domain, max_age) is not None
@@ -347,9 +349,10 @@ def persist_rule_evaluations(analysis_id: str, evals: list[list[RuleEvaluation]]
 
 def persist_analysis(analysis: Analysis) -> None:
     insert_one(
-        "insert into analysis (target_id, name, status, created_at, completed_at) VALUES (?, ?, ?, ?, ?)",
+        "insert into analysis (target_id, name, status, created_at, completed_at, rule_configuration) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
         (analysis.target_id, analysis.name, analysis.status, analysis.created_at,
-         safe_date_to_str(analysis.completed_at)))
+         safe_date_to_str(analysis.completed_at), analysis.rule_configuration.to_json()))
     for item in analysis.domains:
         insert_one(
             "insert into analysis_domains (target_id, domain, price_usd, notes) VALUES (?, ?, ?, ?)",
@@ -384,7 +387,7 @@ def get_recent_analysis() -> list[dict]:
 def get_analysis(analysis_id: str) -> Analysis:
     header = select_one(
         """
-        select target_id, name, status, created_at, completed_at,
+        select target_id, name, status, created_at, completed_at, rule_configuration,
                (select count(*) from analysis_domains where target_id = analysis.target_id) as "total_domains",
                processed_domains
         from analysis
@@ -396,7 +399,8 @@ def get_analysis(analysis_id: str) -> Analysis:
         header["target_id"], header["name"], header["status"],
         header["created_at"], safe_date_from_str(header["completed_at"]),
         [AnalysisDomain(item["domain"], item["price_usd"], item["notes"]) for item in domains],
-        int(header["processed_domains"]))
+        int(header["processed_domains"]),
+        RuleConfiguration.from_json(header["rule_configuration"]))
 
 
 def store_rule_evaluations(analysis_id: str, res: List[RuleEvaluation]) -> None:

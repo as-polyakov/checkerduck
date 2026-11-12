@@ -199,7 +199,7 @@ def legend(rules: Sequence[SeoRule]) -> pd.DataFrame:
     """Column name -> each rule's own metadata. Usable before a run."""
     return pd.DataFrame([
         {"column": label(r), "class": type(r).__name__, "name": r.name,
-         "weight": r.weight, "area": r.area, "deal_breaker": r.deal_breaker} for r in rules
+         "weight": r.weight, "deal_breaker": r.deal_breaker} for r in rules
     ]).set_index("column")
 
 
@@ -260,7 +260,7 @@ class Run:
             "details": self.details.loc[domain],
             "error": self.errors.loc[domain],
         })
-        return out.join(self.legend()[["name", "weight", "area"]]).rename_axis("Rule")
+        return out.join(self.legend()[["name", "weight"]]).rename_axis("Rule")
 
     def failures(self) -> pd.DataFrame:
         """Every (domain, rule) pair whose eval() raised, with the traceback."""
@@ -297,7 +297,7 @@ def evaluate(analysis: Analysis, rules: Sequence[SeoRule], workers: int = 8) -> 
         raise ValueError(f"the same rule class appears twice: {labels}")
 
     def one(domain: str) -> dict[str, tuple]:
-        ctx = EvalContext(analysis.target_id, domain)
+        ctx = EvalContext(analysis.target_id, domain, analysis.rule_configuration)
         row = {}
         for rule in rules:
             try:

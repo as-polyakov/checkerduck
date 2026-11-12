@@ -68,7 +68,7 @@ def run_analysis(analysis: Analysis):
     dao.update_analysis_status(analysis.target_id, AnalysisStatus.RUNNING)
     data_extractor = DataExtractor(analysis)
     data_extractor.run_extract()
-    eval_results = [evaluate_domain(analysis.target_id, domain.domain)
+    eval_results = [evaluate_domain(analysis, domain.domain)
                     for domain in analysis.domains]
 
     dao.persist_rule_evaluations(analysis.target_id, eval_results)

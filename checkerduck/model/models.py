@@ -1,12 +1,13 @@
 """
 Data models for database entities
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional, List, Self, Protocol
 from enum import Enum
 
 from checkerduck.extract.ahrefs_models import OrganicKeyword, Backlink, LinkedAnchor
+from checkerduck.rules.rule_configuration import RuleConfiguration
 
 
 class AnalysisStatus(str, Enum):
@@ -33,6 +34,7 @@ class Analysis:
     completed_at: Optional[datetime]  # Timestamp when analysis completed (None if not completed)
     domains: List[AnalysisDomain]
     processed_domains: int
+    rule_configuration: RuleConfiguration = field(default_factory=RuleConfiguration)
 
 
 @dataclass

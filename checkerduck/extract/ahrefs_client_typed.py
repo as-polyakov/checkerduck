@@ -151,6 +151,13 @@ def construct_field_or(field: str, conditions: Collection) -> dict:
          "is": ["phrase_match", cond]} for cond in conditions]}
 
 
+def valid_output(t: BatchAnalysisTarget) -> bool:
+    if not t.org_traffic_top_by_country:
+        log.warning("No org_traffic_top_by_country for batch result %s", t)
+        return False
+    return True
+
+
 class AhrefsClient(TypedHTTPJSONClient):
     BATCH_ANALYSIS_CHUNK = 100
     BATCH_ANALYSIS_ENDPOINT = "/batch-analysis/batch-analysis"
@@ -216,7 +223,7 @@ class AhrefsClient(TypedHTTPJSONClient):
             }
             raw = self._post_bytes(self.BATCH_ANALYSIS_ENDPOINT, payload)
             parsed = msgspec.json.decode(raw, type=BatchAnalysisResponse)
-            return [AnalysedDomain.of(t, url_to_domain) for t in parsed.targets]
+            return [AnalysedDomain.of(t, url_to_domain) for t in parsed.targets if valid_output(t)]
 
         analysed = []
         for chunk in _chunks(targets, self.BATCH_ANALYSIS_CHUNK):

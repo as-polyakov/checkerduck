@@ -2,13 +2,14 @@ import logging
 import traceback
 from typing import List
 
+from checkerduck.model.models import Analysis
 from checkerduck.rules.seo_rule import *
 
 log = logging.getLogger(__name__)
 
 
-def evaluate_domain(target_id: str, domain: str) -> List[RuleEvaluation]:
-    eval_context = EvalContext(target_id, domain)
+def evaluate_domain(analysis: Analysis, domain: str) -> List[RuleEvaluation]:
+    eval_context = EvalContext(analysis.target_id, domain, analysis.rule_configuration)
 
     try:
         rules = [DomainRatingRule(), OrganicTrafficRule(),
