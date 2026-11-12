@@ -62,11 +62,13 @@ def _cutoff(max_age: timedelta) -> str:
 def _latest_fetched_at(
         conn: sqlite3.Connection, table: str, domain: str, max_age: timedelta | None = None,
 ) -> str | None:
-    # KeyError is the allowlist: the table name is interpolated below.
+    # KeyError is the allowlist. Freshness is the fetched row, not data rows,
+    # so an empty snapshot still counts until it ages out.
     ttl = max_age if max_age is not None else FRESHNESS_TTL[table]
     row = conn.execute(
-        f"SELECT MAX(fetched_at) FROM {table} WHERE domain = ? AND fetched_at >= ?",
-        (domain, _cutoff(ttl)),
+        "SELECT MAX(fetched_at) FROM fetched "
+        "WHERE domain = ? AND table_name = ? AND fetched_at >= ?",
+        (domain, table, _cutoff(ttl)),
     ).fetchone()
     if row is None or row[0] is None:
         return None
@@ -116,30 +118,44 @@ class Store:
     def conn(self) -> sqlite3.Connection:
         return self._connect()
 
-    def _error(self, fetched_at: str, domain: str, api: str, error) -> None:
+    def _error(self, fetched_at: str, domain: str, table: str, error) -> None:
         with self.conn:
             self.conn.execute(
-                "INSERT OR REPLACE INTO query_errors (fetched_at, domain, api, error) "
+                "INSERT OR REPLACE INTO query_errors (fetched_at, domain, table_name, error) "
                 "VALUES (?, ?, ?, ?)",
-                (fetched_at, domain, api, str(error)[:2000]),
+                (fetched_at, domain, table, str(error)[:2000]),
             )
+
+    def _mark_fetched(
+            self, fetched_at: str, domain: str, table: str, records_count: int,
+    ) -> None:
+        # Caller owns the transaction. The fetched row is written before data rows.
+        self.conn.execute(
+            "INSERT OR REPLACE INTO fetched (fetched_at, domain, table_name, records_count) "
+            "VALUES (?, ?, ?, ?)",
+            (fetched_at, domain, table, records_count),
+        )
 
     def _persist(
             self,
             fetched_at: str,
             outcome: Outcome,
-            api: str,
+            table: str,
             sql: str,
             params: Callable[[str, Sequence], list[tuple]],
     ) -> None:
         match outcome:
-            case Fetched(domain=domain, rows=rows) if rows:
+            case Fetched(domain=domain, rows=rows):
                 with self.conn:
-                    self.conn.executemany(sql, params(domain, rows))
+                    self._mark_fetched(fetched_at, domain, table, len(rows))
+                    if rows:
+                        self.conn.executemany(sql, params(domain, rows))
             case Failed(domain=domain, error=err):
-                self._error(fetched_at, domain, api, err)
+                self._error(fetched_at, domain, table, err)
             case NoData(domain=domain):
-                log.debug("%s: no data from %s", domain, api)
+                log.debug("%s: no data from %s", domain, table)
+                with self.conn:
+                    self._mark_fetched(fetched_at, domain, table, 0)
             case _:
                 raise TypeError(f"Unexpected outcome type: {type(outcome).__name__}")
 
@@ -148,21 +164,21 @@ class Store:
             self, fetched_at: str,
             outcomes: Mapping[TargetQueryableDomain, Outcome[RadarCategory]],
     ) -> None:
-        sql = _insert_sql("domain_categories",
-                          ("fetched_at", "domain"), RadarCategory)
+        table = "domain_categories"
+        sql = _insert_sql(table, ("fetched_at", "domain"), RadarCategory)
         for queryable_domain, outcome in outcomes.items():
             self._persist(
-                fetched_at, outcome, "cloudflare_domain_categories", sql,
+                fetched_at, outcome, table, sql,
                 lambda domain, rows: [(fetched_at, domain, *_values(r)) for r in rows],
             )
 
     def persist_metrics_history(
             self, fetched_at: str, outcome: Outcome[MetricHistoryPoint],
     ) -> None:
-        sql = _insert_sql("ahrefs_metrics_history",
-                          ("fetched_at", "domain"), MetricHistoryPoint)
+        table = "ahrefs_metrics_history"
+        sql = _insert_sql(table, ("fetched_at", "domain"), MetricHistoryPoint)
         self._persist(
-            fetched_at, outcome, "metrics_history", sql,
+            fetched_at, outcome, table, sql,
             lambda domain, rows: [(fetched_at, domain, *_values(r)) for r in rows],
         )
 
@@ -173,11 +189,12 @@ class Store:
             date: str,
             country_code: str = "",
     ) -> None:
-        sql = _insert_sql("ahrefs_top_pages",
-                          ("fetched_at", "domain", "country_code", "date", "position"),
-                          TopPage)
+        table = "ahrefs_top_pages"
+        sql = _insert_sql(
+            table, ("fetched_at", "domain", "country_code", "date", "position"), TopPage,
+        )
         self._persist(
-            fetched_at, outcome, "top_pages", sql,
+            fetched_at, outcome, table, sql,
             lambda domain, rows: [(fetched_at, domain, country_code, date, i + 1, *_values(r))
                                   for i, r in enumerate(rows)],
         )
@@ -185,29 +202,31 @@ class Store:
     def persist_organic_keywords(self, fetched_at: str,
                                  outcome: Outcome[ClassifiedKeyword],
                                  date: str) -> None:
-        sql = _insert_sql("ahrefs_organic_keywords",
-                          ("fetched_at", "domain", "date"), ClassifiedKeyword)
+        table = "ahrefs_organic_keywords"
+        sql = _insert_sql(table, ("fetched_at", "domain", "date"), ClassifiedKeyword)
         self._persist(
-            fetched_at, outcome, "organic_keywords", sql,
+            fetched_at, outcome, table, sql,
             lambda domain, rows: [(fetched_at, domain, date, *_values(r)) for r in rows],
         )
 
     def persist_backlinks(self, fetched_at: str,
                           outcome: Outcome[ClassifiedBacklink]) -> None:
-        sql = _insert_sql("ahrefs_backlinks",
-                          ("fetched_at", "domain"), ClassifiedBacklink)
+        table = "ahrefs_backlinks"
+        sql = _insert_sql(table, ("fetched_at", "domain"), ClassifiedBacklink)
         self._persist(
-            fetched_at, outcome, "backlinks", sql,
+            fetched_at, outcome, table, sql,
             lambda domain, rows: [(fetched_at, domain, *_values(r)) for r in rows],
         )
 
     def persist_outgoing_anchors(
             self, fetched_at: str, outcome: Outcome[ClassifiedAnchor]) -> None:
-        sql = _insert_sql("anchors_forbidden_words",
-                          ("fetched_at", "domain", "direction", "url_from"),
-                          ClassifiedAnchor, ANCHOR_SKIP)
+        table = "anchors_forbidden_words"
+        sql = _insert_sql(
+            table, ("fetched_at", "domain", "direction", "url_from"),
+            ClassifiedAnchor, ANCHOR_SKIP,
+        )
         self._persist(
-            fetched_at, outcome, "outgoing_anchors", sql,
+            fetched_at, outcome, table, sql,
             lambda domain, rows: [(fetched_at, domain, OUT, "", *_values(r, ANCHOR_SKIP))
                                   for r in rows],
         )
@@ -220,8 +239,9 @@ class Store:
             analysed: Sequence[AnalysedDomain],
             langs_by_domain: Mapping[str, str],
     ) -> None:
+        table = "batch_analysis"
         sql = _insert_sql(
-            "batch_analysis",
+            table,
             ("fetched_at", "domain", "detected_lang", "lang_by_top_traffic"),
             BatchAnalysisTarget, BATCH_SKIP,
         )
@@ -231,6 +251,8 @@ class Store:
         )
         # Country rows are not fetched on their own; they share this batch snapshot.
         with self.conn:
+            for item in analysed:
+                self._mark_fetched(fetched_at, item.domain, table, 1)
             self.conn.executemany(
                 sql,
                 [

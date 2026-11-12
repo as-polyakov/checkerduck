@@ -60,7 +60,16 @@ def _freeze(monkeypatch) -> None:
     monkeypatch.setattr("checkerduck.db.store.datetime", FrozenDateTime)
 
 
+def _mark_fetched(conn, table: str, fetched_at: str, domain: str, records_count: int = 1) -> None:
+    conn.execute(
+        "INSERT OR REPLACE INTO fetched (fetched_at, domain, table_name, records_count) "
+        "VALUES (?, ?, ?, ?)",
+        (fetched_at, domain, table, records_count),
+    )
+
+
 def _insert_snapshot(conn, table: str, fetched_at: str, domain: str) -> None:
+    _mark_fetched(conn, table, fetched_at, domain)
     if table == "domain_categories":
         conn.execute(
             "INSERT INTO domain_categories (fetched_at, domain, id) VALUES (?, ?, '1')",
@@ -108,6 +117,7 @@ def _insert_snapshot(conn, table: str, fetched_at: str, domain: str) -> None:
 
 
 def _batch(conn, fetched_at: str, domain: str, lang: str | None, rating: float = 1) -> None:
+    _mark_fetched(conn, "batch_analysis", fetched_at, domain)
     conn.execute(
         "INSERT INTO batch_analysis "
         "(fetched_at, domain, protocol, mode, detected_lang, domain_rating, "
@@ -149,9 +159,19 @@ def test_latest_fetched_at_rejects_unlisted_table(conn):
         _latest_fetched_at(conn, "ahrefs_org_traffic_country", "x.example")
 
 
-def test_nodata_does_not_make_domain_fresh(store):
-    store.persist_metrics_history(fetched_at_now(), NoData(domain="empty.example"))
-    assert store.is_metrics_history_fresh("empty.example") is False
+def test_nodata_records_empty_fetch(conn, store):
+    stamp = fetched_at_now()
+    store.persist_metrics_history(stamp, NoData(domain="empty.example"))
+    assert store.is_metrics_history_fresh("empty.example") is True
+    row = conn.execute(
+        "SELECT records_count FROM fetched WHERE domain = ? AND table_name = ? AND fetched_at = ?",
+        ("empty.example", "ahrefs_metrics_history", stamp),
+    ).fetchone()
+    assert row["records_count"] == 0
+    assert conn.execute(
+        "SELECT COUNT(*) AS n FROM ahrefs_metrics_history WHERE domain = ?",
+        ("empty.example",),
+    ).fetchone()["n"] == 0
 
 
 def test_dao_reads_only_newer_fresh_snapshot(dao_conn):
@@ -169,6 +189,7 @@ def test_dao_reads_only_newer_fresh_snapshot(dao_conn):
             "VALUES (?, ?, ?, ?)",
             (stamp, domain, day, traffic),
         )
+        _mark_fetched(dao_conn, "ahrefs_metrics_history", stamp, domain)
     for stamp, rating in ((stale, 1), (older, 10), (now, 77)):
         _batch(dao_conn, stamp, domain, "de", rating)
 
@@ -259,6 +280,8 @@ def test_missing_snapshot_raises(dao_conn):
         "VALUES (?, 'second.example', '', '2026-01-01', 2, 10)",
         (now,),
     )
+    _mark_fetched(dao_conn, "ahrefs_top_pages", now, "zero.example")
+    _mark_fetched(dao_conn, "ahrefs_top_pages", now, "second.example")
     with pytest.raises(MissingFreshData):
         dao.get_domain_top_page_traffic_pcs("zero.example")
     with pytest.raises(MissingFreshData):
@@ -403,6 +426,17 @@ def test_migration_rewrites_fetched_at_from_analysis_created_at():
         ).fetchone()
         assert batch["fetched_at"] == country["fetched_at"] == "2026-06-15T08:07:00+00:00"
         assert country["traffic"] == 8
+
+        fetched = {
+            (row["table_name"], row["domain"], row["fetched_at"]): row["records_count"]
+            for row in anchor.execute("SELECT table_name, domain, fetched_at, records_count FROM fetched")
+        }
+        assert fetched == {
+            ("ahrefs_metrics_history", "collapse.example", "2026-05-01T10:00:00+00:00"): 1,
+            ("ahrefs_metrics_history", "trunc.example", "2026-06-15T08:07:00+00:00"): 1,
+            ("ahrefs_metrics_history", "orphan.example", "1970-01-01T00:00:00+00:00"): 1,
+            ("batch_analysis", "trunc.example", "2026-06-15T08:07:00+00:00"): 1,
+        }
 
         analysis_cols = [row["name"] for row in anchor.execute("PRAGMA table_info(analysis)")]
         assert "target_id" in analysis_cols

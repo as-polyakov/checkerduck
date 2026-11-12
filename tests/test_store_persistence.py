@@ -49,6 +49,7 @@ APPLICATION_TABLES = frozenset({
     "ahrefs_backlinks",
     "anchors_forbidden_words",
     "query_errors",
+    "fetched",
     "analysis",
     "analysis_domains",
     "rules_evaluation_results",
@@ -106,9 +107,17 @@ def test_memory_database_is_migrated_schema(conn):
     ]
 
     error_columns = list(conn.execute("PRAGMA table_info(query_errors)"))
-    assert [row["name"] for row in error_columns] == ["fetched_at", "domain", "api", "error"]
+    assert [row["name"] for row in error_columns] == ["fetched_at", "domain", "table_name", "error"]
     assert sorted((row["pk"], row["name"]) for row in error_columns if row["pk"]) == [
-        (1, "fetched_at"), (2, "domain"), (3, "api"),
+        (1, "fetched_at"), (2, "domain"), (3, "table_name"),
+    ]
+
+    fetched_columns = list(conn.execute("PRAGMA table_info(fetched)"))
+    assert [row["name"] for row in fetched_columns] == [
+        "fetched_at", "domain", "table_name", "records_count",
+    ]
+    assert sorted((row["pk"], row["name"]) for row in fetched_columns if row["pk"]) == [
+        (1, "fetched_at"), (2, "domain"), (3, "table_name"),
     ]
 
 
@@ -353,6 +362,16 @@ def test_extractor_rows_round_trip(conn, store):
     assert _count(conn, "anchors_forbidden_words", fetched_at=FETCHED_AT) == 3
     assert _count(conn, "ahrefs_organic_keywords", fetched_at=FETCHED_AT) == 3
     assert _count(conn, "query_errors", fetched_at=FETCHED_AT) == 0
+    assert _count(conn, "fetched", fetched_at=FETCHED_AT) == 14
+    assert _count(conn, "fetched", fetched_at=FETCHED_AT, table_name="ahrefs_org_traffic_country") == 0
+    fetch_counts = {
+        (row["domain"], row["table_name"]): row["records_count"]
+        for row in _select(conn, "fetched", fetched_at=FETCHED_AT)
+    }
+    assert fetch_counts[("alpha.example", "domain_categories")] == 2
+    assert fetch_counts[("alpha.example", "ahrefs_metrics_history")] == 2
+    assert fetch_counts[("beta.example", "ahrefs_organic_keywords")] == 1
+    assert fetch_counts[("alpha.example", "batch_analysis")] == 1
 
     for category, domain in (
         *[(row, alpha.domain) for row in alpha_categories],
@@ -474,10 +493,18 @@ def test_failed_outcome_records_error_without_dropping_rows(conn, store):
     errors = _select(conn, "query_errors", fetched_at=FETCHED_AT)
     assert len(errors) == 1
     assert errors[0]["domain"] == "beta.example"
-    assert errors[0]["api"] == "backlinks"
+    assert errors[0]["table_name"] == "ahrefs_backlinks"
     assert errors[0]["error"] == error[:2000]
     assert _count(conn, "ahrefs_backlinks", fetched_at=FETCHED_AT) == 1
     assert _count(conn, "ahrefs_metrics_history", fetched_at=FETCHED_AT) == 0
+    fetch_counts = {
+        (row["domain"], row["table_name"]): row["records_count"]
+        for row in _select(conn, "fetched", fetched_at=FETCHED_AT)
+    }
+    assert fetch_counts == {
+        ("alpha.example", "ahrefs_backlinks"): 1,
+        ("alpha.example", "ahrefs_metrics_history"): 0,
+    }
     _assert_round_trip(
         conn, "ahrefs_backlinks", kept,
         {"fetched_at": FETCHED_AT, "domain": "alpha.example", "url_from": kept.url_from},

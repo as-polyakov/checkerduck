@@ -203,6 +203,15 @@ def legend(rules: Sequence[SeoRule]) -> pd.DataFrame:
     ]).set_index("column")
 
 
+def _eval_rule(rule: SeoRule, ctx: EvalContext) -> tuple[float, bool, str, str]:
+    """score, critical, details, traceback. A crash is NaN, never score 0."""
+    try:
+        ev = rule.eval(ctx)
+        return float(ev.score), bool(ev.critical_violation), ev.details or "", ""
+    except Exception:
+        return float("nan"), False, "", traceback.format_exc(limit=4)
+
+
 @dataclass(frozen=True)
 class Run:
     """One evaluation of one rule set over one set of domains."""
@@ -211,6 +220,7 @@ class Run:
     details: pd.DataFrame    # domain x rule -> str
     errors: pd.DataFrame     # domain x rule -> traceback, "" when it ran
     rules: tuple[SeoRule, ...]
+    analysis: Analysis       # needed so for_domain can build a fresh EvalContext
 
     def legend(self) -> pd.DataFrame:
         """Column name -> the rule's own metadata."""
@@ -253,14 +263,23 @@ class Run:
         return (self.scores.fillna(0) * w).sum(axis=1) / (ran * w).sum(axis=1)
 
     def for_domain(self, domain: str) -> pd.DataFrame:
-        """Every rule's full output for one domain -- the drill-down view."""
-        out = pd.DataFrame({
-            "score": self.scores.loc[domain],
-            "critical": self.critical.loc[domain],
-            "details": self.details.loc[domain],
-            "error": self.errors.loc[domain],
-        })
-        return out.join(self.legend()[["name", "weight"]]).rename_axis("Rule")
+        """Re-run every rule for one domain. Does not read the saved score frames.
+
+        Rule edits picked up by autoreload show up here without another full
+        evaluate(). The wide table from the last evaluate() stays as it was.
+        """
+        ctx = EvalContext(self.analysis.target_id, domain, self.analysis.rule_configuration)
+        rows = {}
+        for rule in self.rules:
+            score, critical, details, error = _eval_rule(rule, ctx)
+            rows[label(rule)] = {
+                "score": score, "critical": critical, "details": details, "error": error,
+            }
+        out = pd.DataFrame.from_dict(rows, orient="index")
+        out = out.join(self.legend()[["name", "weight"]]).rename_axis("Rule")
+        # Same two-decimal rounding as show(). A raw score under 0.01 makes
+        # pandas print the whole column in scientific notation (6.90e-01).
+        return show(out, flatten=False)
 
     def failures(self) -> pd.DataFrame:
         """Every (domain, rule) pair whose eval() raised, with the traceback."""
@@ -298,15 +317,7 @@ def evaluate(analysis: Analysis, rules: Sequence[SeoRule], workers: int = 8) -> 
 
     def one(domain: str) -> dict[str, tuple]:
         ctx = EvalContext(analysis.target_id, domain, analysis.rule_configuration)
-        row = {}
-        for rule in rules:
-            try:
-                ev = rule.eval(ctx)
-                row[label(rule)] = (float(ev.score), bool(ev.critical_violation),
-                                    ev.details or "", "")
-            except Exception:
-                row[label(rule)] = (float("nan"), False, "", traceback.format_exc(limit=4))
-        return row
+        return {label(rule): _eval_rule(rule, ctx) for rule in rules}
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         rows = dict(zip(domains, pool.map(one, domains)))
@@ -317,7 +328,7 @@ def evaluate(analysis: Analysis, rules: Sequence[SeoRule], workers: int = 8) -> 
 
     log.info("evaluated %d rules over %d domains", len(rules), len(domains))
     return Run(frame(0, "float"), frame(1, "bool"), frame(2, "object"),
-               frame(3, "object"), tuple(rules))
+               frame(3, "object"), tuple(rules), analysis)
 
 
 # ------------------------------------------------------------------ rendering
